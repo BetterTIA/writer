@@ -29,6 +29,12 @@
 - Export -> edit -> import tools state in their message when objects could not be exported and were
   therefore not checked for references.
 
+### Fixed (ANet fork, 0.2.0.3)
+
+- __`RenameTags` / `RenameObjects`__: the fail-safe check read only the top level of the cross
+  references and so missed every use of a DB or technology object member; it now walks the members
+  too. `UserCount` counts `UsedBy` references instead of references in both directions.
+
 ### Fixed (ANet fork, 0.2.0.2)
 
 - __`GetProject`__ failed with the SDK's generic error on projects whose attributes hold Openness

@@ -60,12 +60,13 @@ namespace TiaMcpServer.Siemens
         public bool Failsafe { get; set; }
 
         /// <summary>
-        /// Fail-safe blocks that refer to the object, from the cross references. Openness has no
-        /// 'safety tag' attribute, so this is what marks a tag as safety relevant.
+        /// Fail-safe blocks found in the cross references of the object or of any of its members,
+        /// in either direction. Openness has no 'safety tag' attribute, so this is what marks an
+        /// object as safety relevant; it errs towards listing a block too many.
         /// </summary>
         public List<string> UsedByFailsafe { get; set; } = new List<string>();
 
-        /// <summary>Number of objects that refer to it, fail-safe or not.</summary>
+        /// <summary>Number of objects that use it or one of its members ('UsedBy' references only).</summary>
         public int UserCount { get; set; }
     }
 
@@ -491,18 +492,30 @@ namespace TiaMcpServer.Siemens
             public object? Source;
         }
 
-        /// <summary>Names of the objects that refer to <paramref name="source"/>, from its cross references.</summary>
-        private static List<string> UsersOf(object? source)
+        /// <summary>
+        /// Collects the names in the cross references of <paramref name="source"/> and of its
+        /// members. References to a member of a DB hang below SourceObject.Children, not on the
+        /// DB itself, so reading only the top level misses every use of a member - seen live as
+        /// an instance DB reporting fewer references than there were blocks using it.
+        /// </summary>
+        /// <param name="all">Every referenced name, whatever the direction of the reference.</param>
+        /// <param name="users">Only the names with a 'UsedBy' location.</param>
+        private static void CollectReferences(SourceObject source, HashSet<string> all, HashSet<string> users)
         {
-            var service = (source as IEngineeringServiceProvider)?.GetService<CrossReferenceService>();
+            foreach (var reference in source.References)
+            {
+                all.Add(reference.Name);
 
-            return service == null
-                ? new List<string>()
-                : service.GetCrossReferences(CrossReferenceFilter.AllObjects).Sources
-                    .SelectMany(s => s.References)
-                    .Select(r => r.Name)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
+                if (reference.Locations.Any(l => l.ReferenceType == ReferenceType.UsedBy))
+                {
+                    users.Add(reference.Name);
+                }
+            }
+
+            foreach (var child in source.Children)
+            {
+                CollectReferences(child, all, users);
+            }
         }
 
         /// <summary>
@@ -520,10 +533,17 @@ namespace TiaMcpServer.Siemens
             {
                 try
                 {
-                    var users = UsersOf(item.Source);
+                    var all = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    var users = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    var service = (item.Source as IEngineeringServiceProvider)?.GetService<CrossReferenceService>();
+
+                    foreach (var source in service?.GetCrossReferences(CrossReferenceFilter.AllObjects).Sources.ToList() ?? new List<SourceObject>())
+                    {
+                        CollectReferences(source, all, users);
+                    }
 
                     item.Info.UserCount = users.Count;
-                    item.Info.UsedByFailsafe = users.Where(failsafeBlocks.Contains).ToList();
+                    item.Info.UsedByFailsafe = all.Where(failsafeBlocks.Contains).ToList();
                 }
                 catch (Exception ex)
                 {
