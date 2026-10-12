@@ -1,9 +1,11 @@
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
+using Siemens.Engineering.Compiler;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Text.Json.Nodes;
 using TiaMcpServer.Siemens;
 
 namespace TiaMcpServer.ModelContextProtocol
@@ -28,6 +30,18 @@ namespace TiaMcpServer.ModelContextProtocol
 
         /// <summary>Objects TIA Portal would not export, so references inside them were not seen.</summary>
         public IEnumerable<string>? NotScanned { get; set; }
+    }
+
+    /// <summary>Result of a batch rename (RenameTags, RenameObjects), for a dry run as well as for the real run.</summary>
+    public class ResponseBatchRename : ResponseMessage
+    {
+        public bool DryRun { get; set; }
+
+        public bool Applied { get; set; }
+
+        public IEnumerable<BatchRenameItem>? Items { get; set; }
+
+        public IEnumerable<string>? Warnings { get; set; }
     }
 
     public static partial class McpServer
@@ -113,6 +127,13 @@ namespace TiaMcpServer.ModelContextProtocol
         {
             var summary = $"{result.Changes.Count} change(s) in {result.Objects.Count} object(s)";
 
+            // References inside a block that could not be exported are invisible to the edit,
+            // so this must not hide in a list at the end of the response.
+            var blind = result.NotScanned.Count == 0
+                ? string.Empty
+                : $" WARNING: {result.NotScanned.Count} object(s) could not be exported and were NOT checked for references " +
+                  "(inconsistent or know-how protected, see NotScanned) - compile the software first and repeat the dry run.";
+
             return new ResponseXmlEdit
             {
                 DryRun = dryRun,
@@ -122,11 +143,11 @@ namespace TiaMcpServer.ModelContextProtocol
                 Changes = result.Changes.Take(MaxReportedChanges),
                 Warnings = result.Warnings,
                 NotScanned = result.NotScanned,
-                Message = result.Changes.Count == 0
+                Message = (result.Changes.Count == 0
                     ? "Nothing to change."
                     : result.Applied
                         ? $"{summary} imported. Compile the software to verify. {SaveHint}"
-                        : $"Dry run: {summary} would be imported. Nothing was changed; repeat with dryRun=false to apply.",
+                        : $"Dry run: {summary} would be imported. Nothing was changed; repeat with dryRun=false to apply.") + blind,
                 Meta = result.Applied ? OkMeta() : Ok()
             };
         }
@@ -151,21 +172,33 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "ReplaceNetworkText", Title = "Replace in network titles and comments", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Replace a text in the titles and comments of every network of a block (literal, case-sensitive). The block is exported, edited and imported over itself. Defaults to a dry run that reports each change and imports nothing. Know-how protected blocks are rejected; fail-safe blocks need allowFailsafe")]
+        [McpServerTool(Name = "ReplaceNetworkText", Title = "Replace in network titles and comments", Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true),
+         Description("Replace texts in the titles and comments of every network of a block (literal, case-sensitive). All pairs are applied in one pass, so '1' to '2' together with '2' to '1' swaps. With scope 'all' also the title and comment of the block and the texts of GRAPH sequences (step titles, transition and sequence comments; not step names, which are interface members). The block is exported, edited and imported over itself. Defaults to a dry run that reports each change and imports nothing. Know-how protected blocks are rejected; fail-safe blocks need allowFailsafe")]
         public static ResponseXmlEdit ReplaceNetworkText(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("blockPath: root-relative path of the block, e.g. Station1/FB_Conveyor")] string blockPath,
-            [Description("find: the text to look for")] string find,
-            [Description("replace: the text to put in its place")] string replace,
+            [Description("replacements: 'find=replace' pairs separated by ';', e.g. 'Pump 1=Pump 2; Pump 2=Pump 1'")] string replacements,
+            [Description("scope: 'networks' (default) for network titles and comments only, 'all' to include the block title and comment and GRAPH texts")] string scope = "networks",
             [Description("culture: restrict the replacement to one language, e.g. en-US; empty replaces in every language")] string culture = "",
             [Description("dryRun: true (default) only reports what would change; false imports the edited block")] bool dryRun = true,
             [Description("allowFailsafe: true allows importing a fail-safe block, which changes its F-signature")] bool allowFailsafe = false)
         {
-            return Guarded(nameof(ReplaceNetworkText), () => XmlEdited(
-                Portal.EditNetworkTexts(softwarePath, blockPath,
-                    doc => SimaticMl.ReplaceNetworkText(doc, find, replace, culture), dryRun, allowFailsafe),
-                dryRun));
+            return Guarded(nameof(ReplaceNetworkText), () =>
+            {
+                var all = scope.Equals("all", StringComparison.OrdinalIgnoreCase);
+
+                if (!all && !scope.Equals("networks", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new McpException($"Unknown scope '{scope}'. Use 'networks' or 'all'.");
+                }
+
+                var pairs = ParseRenames(replacements, StringComparer.Ordinal);
+
+                return XmlEdited(
+                    Portal.EditNetworkTexts(softwarePath, blockPath,
+                        doc => SimaticMl.ReplaceNetworkText(doc, pairs, culture, all), dryRun, allowFailsafe),
+                    dryRun);
+            });
         }
 
         [WriteTool]
@@ -195,9 +228,11 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         /// <summary>"A=B; C.D=E" to { "A": "B", "C.D": "E" }.</summary>
-        public static IDictionary<string, string> ParseRenames(string renames)
+        /// <param name="comparer">Names compare without case (the default); texts to replace are passed with Ordinal.</param>
+        public static IDictionary<string, string> ParseRenames(string renames, StringComparer? comparer = null)
         {
-            var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            // shortcut: pairs are split at ';' and '=', so neither side can contain those two characters; a quoting rule if that is ever needed.
+            var result = new Dictionary<string, string>(comparer ?? StringComparer.OrdinalIgnoreCase);
 
             foreach (var pair in (renames ?? string.Empty).Split([';'], StringSplitOptions.RemoveEmptyEntries).Where(p => p.Trim().Length > 0))
             {
@@ -212,6 +247,156 @@ namespace TiaMcpServer.ModelContextProtocol
             }
 
             return result;
+        }
+
+        #endregion
+
+        #region batch rename, tag comments, compile
+
+        private static ResponseBatchRename BatchRenamed(BatchRenameResult result, bool dryRun, string kind)
+        {
+            return new ResponseBatchRename
+            {
+                DryRun = dryRun,
+                Applied = result.Applied,
+                Items = result.Items,
+                Warnings = result.Warnings,
+                Message = result.Applied
+                    ? $"{result.Items.Count} {kind} renamed. Blocks that refer to them are inconsistent until compiled. {SaveHint}"
+                    : $"Dry run: {result.Items.Count} {kind} would be renamed. Nothing was changed; repeat with dryRun=false to apply.",
+                Meta = result.Applied ? OkMeta() : Ok()
+            };
+        }
+
+        [WriteTool]
+        [McpServerTool(Name = "RenameTags", Title = "Rename tags in a batch", Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true),
+         Description("Rename many PLC tags in one transaction, by name across all tag tables. A new name may be the current name of another tag of the batch, so a swap or rotation needs no temporary names. Defaults to a dry run that lists each tag with its table, how many objects use it and which fail-safe blocks use it, and renames nothing. Tags used by fail-safe blocks need allowFailsafe; a name taken by a tag outside the batch is rejected. HMI tags that name a PLC tag are not updated")]
+        public static ResponseBatchRename RenameTags(
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
+            [Description("renames: 'currentName=newName' pairs separated by ';', e.g. 'iPump1_Run=iPump2_Run; iPump2_Run=iPump1_Run'")] string renames,
+            [Description("dryRun: true (default) only reports what would change; false renames the tags")] bool dryRun = true,
+            [Description("allowFailsafe: true allows renaming tags that fail-safe blocks use, which changes the safety program")] bool allowFailsafe = false)
+        {
+            return Guarded(nameof(RenameTags), () =>
+                BatchRenamed(Portal.RenameTags(softwarePath, ParseRenames(renames), dryRun, allowFailsafe), dryRun, "tag(s)"));
+        }
+
+        [WriteTool]
+        [McpServerTool(Name = "RenameObjects", Title = "Rename blocks, TOs and types in a batch", Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true),
+         Description("Rename many blocks, technology objects and PLC data types in one transaction, by name. A new name may be the current name of another object of the batch, so a swap needs no temporary names. Defaults to a dry run that lists each object with its kind, path and the fail-safe blocks that use it, and renames nothing. Fail-safe blocks and objects used by them need allowFailsafe; know-how protected objects and names taken outside the batch are rejected. Callers of a renamed block are inconsistent until compiled")]
+        public static ResponseBatchRename RenameObjects(
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
+            [Description("renames: 'currentName=newName' pairs separated by ';', e.g. 'PID_1=PID_2; PID_2=PID_1'")] string renames,
+            [Description("dryRun: true (default) only reports what would change; false renames the objects")] bool dryRun = true,
+            [Description("allowFailsafe: true allows renaming fail-safe blocks and objects they use, which changes the safety program")] bool allowFailsafe = false)
+        {
+            return Guarded(nameof(RenameObjects), () =>
+                BatchRenamed(Portal.RenameObjects(softwarePath, ParseRenames(renames), dryRun, allowFailsafe), dryRun, "object(s)"));
+        }
+
+        private static ResponseXmlEdit CommentsEdited(List<XmlChange> changes, bool dryRun)
+        {
+            return new ResponseXmlEdit
+            {
+                DryRun = dryRun,
+                Applied = !dryRun && changes.Count > 0,
+                ChangeCount = changes.Count,
+                Changes = changes.Take(MaxReportedChanges),
+                Message = changes.Count == 0
+                    ? "Nothing to change."
+                    : dryRun
+                        ? $"Dry run: {changes.Count} tag comment(s) would change. Nothing was changed; repeat with dryRun=false to apply."
+                        : $"{changes.Count} tag comment(s) changed. {SaveHint}",
+                Meta = dryRun || changes.Count == 0 ? Ok() : OkMeta()
+            };
+        }
+
+        [WriteTool]
+        [McpServerTool(Name = "SetTagComment", Title = "Set tag comment", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Set the comment of one PLC tag, which 'UpdateTag' cannot do. A comment has one text per project language")]
+        public static ResponseXmlEdit SetTagComment(
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
+            [Description("tagPath: path of the tag including its table, e.g. TagGroup1/Table1/Tag_1")] string tagPath,
+            [Description("comment: the new comment text")] string comment,
+            [Description("culture: language of the text, e.g. en-US; may stay empty when the project has one language")] string culture = "")
+        {
+            return Guarded(nameof(SetTagComment), () => CommentsEdited(Portal.SetTagComment(softwarePath, tagPath, comment, culture), false));
+        }
+
+        [WriteTool]
+        [McpServerTool(Name = "ReplaceTagComments", Title = "Replace in tag comments", Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true),
+         Description("Replace texts in the comments of the PLC tags of one tag table, or of all tables (literal, case-sensitive). All pairs are applied in one pass, so '1' to '2' together with '2' to '1' swaps. Defaults to a dry run that reports each change and writes nothing")]
+        public static ResponseXmlEdit ReplaceTagComments(
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
+            [Description("replacements: 'find=replace' pairs separated by ';', e.g. 'Pump 1=Pump 2; Pump 2=Pump 1'")] string replacements,
+            [Description("tagTablePath: root-relative path of the tag table; empty covers every tag table of the PLC")] string tagTablePath = "",
+            [Description("culture: restrict the replacement to one language, e.g. en-US; empty replaces in every language")] string culture = "",
+            [Description("dryRun: true (default) only reports what would change; false writes the comments")] bool dryRun = true)
+        {
+            return Guarded(nameof(ReplaceTagComments), () =>
+            {
+                var pairs = ParseRenames(replacements, StringComparer.Ordinal);
+
+                return CommentsEdited(
+                    Portal.EditTagComments(softwarePath, tagTablePath, text => SimaticMl.ReplaceAll(text, pairs), culture, dryRun), dryRun);
+            });
+        }
+
+        [WriteTool]
+        [McpServerTool(Name = "RenameWatchTableGroup", Title = "Rename watch table group", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Rename a user group below 'Watch and force tables'. The tables inside keep their names; a sibling group of the new name is rejected")]
+        public static ResponseRenamed RenameWatchTableGroup(
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
+            [Description("groupPath: root-relative path of the group, e.g. Station1/Commissioning")] string groupPath,
+            [Description("newName: the new group name, without a slash")] string newName)
+        {
+            return Guarded(nameof(RenameWatchTableGroup), () =>
+            {
+                Portal.RenameWatchTableGroup(softwarePath, groupPath, newName);
+                return Renamed("Watch table group", groupPath, newName, ReplaceLeaf(groupPath, newName));
+            });
+        }
+
+        [McpServerTool(Name = "CompileBlock", Title = "Compile block or block group", Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Compile one block, or every block of one block group, instead of the whole PLC software - enough to make the callers of a renamed block consistent again. A fail-safe block, or a group that contains one, is refused: compiling the safety program stays with the operator. Warnings are reported as a successful compile; only errors fail the call")]
+        public static ResponseCompileSoftware CompileBlock(
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
+            [Description("path: root-relative path of a block or of a block group, e.g. Station1/FB_Conveyor or Station1")] string path)
+        {
+            try
+            {
+                var result = Portal.CompileBlocks(softwarePath, path);
+                var messages = FlattenCompilerMessages(result.Messages, 0).ToList();
+                var state = result.State.ToString();
+
+                if (result.State == CompilerResultState.Error)
+                {
+                    throw new McpException(
+                        $"Compiling '{path}' failed with {result.ErrorCount} error(s). " +
+                        string.Join(" | ", messages
+                            .Where(m => string.Equals(m.State, nameof(CompilerResultState.Error), StringComparison.OrdinalIgnoreCase))
+                            .Take(5)
+                            .Select(m => $"{m.Path}: {m.Description}")));
+                }
+
+                return new ResponseCompileSoftware
+                {
+                    Message = $"Compiling '{path}' finished with state '{state}': {result.ErrorCount} error(s), {result.WarningCount} warning(s)",
+                    State = state,
+                    ErrorCount = result.ErrorCount,
+                    WarningCount = result.WarningCount,
+                    Messages = messages,
+                    Meta = Ok(new JsonObject { ["state"] = state, ["errorCount"] = result.ErrorCount, ["warningCount"] = result.WarningCount })
+                };
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error compiling '{path}': {ex.Message}", ex);
+            }
         }
 
         #endregion

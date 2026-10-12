@@ -131,20 +131,14 @@ namespace TiaMcpServer.Siemens
             }
         }
 
-        private static void SetText(List<XmlChange> changes, XDocument doc, int network, string composition, string culture, XElement text, string value)
+        private static void SetText(List<XmlChange> changes, XDocument doc, string where, XElement text, string value)
         {
             if (text.Value == value)
             {
                 return;
             }
 
-            changes.Add(new XmlChange
-            {
-                Object = ObjectName(doc),
-                Where = $"network {network} {composition} [{culture}]",
-                Old = text.Value,
-                New = value
-            });
+            changes.Add(new XmlChange { Object = ObjectName(doc), Where = where, Old = text.Value, New = value });
 
             text.Value = value;
         }
@@ -185,26 +179,61 @@ namespace TiaMcpServer.Siemens
                         "pass one of them as 'culture'.");
                 }
 
-                SetText(changes, doc, network, NetworkTexts[i], chosen[0].Culture, chosen[0].Text, values[i]!);
+                SetText(changes, doc, $"network {network} {NetworkTexts[i]} [{chosen[0].Culture}]", chosen[0].Text, values[i]!);
             }
 
             return changes;
         }
 
         /// <summary>
-        /// Replaces <paramref name="find"/> (case-sensitive, literal) in the titles and comments of
-        /// every network of the block.
+        /// Replaces every key of <paramref name="replacements"/> by its value in one pass
+        /// (literal, case-sensitive), so "1" to "2" together with "2" to "1" swaps instead of
+        /// collapsing both into one.
         /// </summary>
-        /// <param name="culture">Empty replaces in every language.</param>
-        public static List<XmlChange> ReplaceNetworkText(XDocument doc, string find, string replace, string culture)
+        public static string ReplaceAll(string text, IDictionary<string, string> replacements)
         {
-            if (string.IsNullOrEmpty(find))
+            if (replacements.Count == 0 || replacements.Keys.Any(string.IsNullOrEmpty))
             {
-                throw new PortalException(PortalErrorCode.InvalidParams, "'find' must not be empty.");
+                throw new PortalException(PortalErrorCode.InvalidParams, "Give at least one 'find=replace' pair with a non-empty 'find'.");
             }
 
+            // Longest first: "Pump 10" must not be eaten by the pair for "Pump 1".
+            var pattern = string.Join("|", replacements.Keys.OrderByDescending(k => k.Length).Select(Regex.Escape));
+
+            return Regex.Replace(text, pattern, match => replacements[match.Value]);
+        }
+
+        /// <summary>
+        /// Applies <see cref="ReplaceAll"/> to the titles and comments of every network of the
+        /// block and, with <paramref name="all"/>, also to the title and comment of the block
+        /// itself and to the texts inside GRAPH sequences (sequence comment, step titles,
+        /// transition comments). Step and transition names are left alone: a step name is also
+        /// a member of the block's interface, so changing it is a member rename, not a text edit.
+        /// </summary>
+        /// <param name="culture">Empty replaces in every language.</param>
+        public static List<XmlChange> ReplaceNetworkText(XDocument doc, IDictionary<string, string> replacements, string culture, bool all = false)
+        {
             var changes = new List<XmlChange>();
             var networks = Networks(doc);
+
+            void Replace(string where, string textCulture, XElement text)
+            {
+                if (string.IsNullOrEmpty(culture) || Same(textCulture, culture))
+                {
+                    SetText(changes, doc, $"{where} [{textCulture}]", text, ReplaceAll(text.Value, replacements));
+                }
+            }
+
+            if (all)
+            {
+                foreach (var composition in NetworkTexts)
+                {
+                    foreach (var (textCulture, text) in Texts(Body(doc)!, composition))
+                    {
+                        Replace($"block {composition}", textCulture, text);
+                    }
+                }
+            }
 
             for (var n = 0; n < networks.Count; n++)
             {
@@ -212,11 +241,22 @@ namespace TiaMcpServer.Siemens
                 {
                     foreach (var (textCulture, text) in Texts(networks[n], composition))
                     {
-                        if ((string.IsNullOrEmpty(culture) || Same(textCulture, culture)) && text.Value.Contains(find))
-                        {
-                            SetText(changes, doc, n + 1, composition, textCulture, text, text.Value.Replace(find, replace));
-                        }
+                        Replace($"network {n + 1} {composition}", textCulture, text);
                     }
+                }
+
+                if (!all)
+                {
+                    continue;
+                }
+
+                foreach (var text in networks[n].Descendants().Where(e =>
+                             e.Name.LocalName == "MultiLanguageText" && e.Ancestors().Any(a => a.Name.LocalName == "Graph")))
+                {
+                    var node = text.Ancestors().FirstOrDefault(a => a.Name.LocalName == "Step" || a.Name.LocalName == "Transition");
+                    var owner = node == null ? "sequence" : $"{node.Name.LocalName.ToLowerInvariant()} {(string?)node.Attribute("Number")}";
+
+                    Replace($"network {n + 1} {owner} {text.Parent?.Name.LocalName}", (string?)text.Attribute("Lang") ?? string.Empty, text);
                 }
             }
 

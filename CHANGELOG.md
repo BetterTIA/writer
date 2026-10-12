@@ -15,6 +15,25 @@
   and `RenameTagTable` / `UpdateTag` accept such a name.
 - Details, limits and what is not verified against a running TIA Portal: [ANET.md](ANET.md).
 
+### Added (ANet fork, 0.2.0.2)
+
+- __Batch renames with swap__: `RenameTags` (PLC tags by name across all tables) and `RenameObjects`
+  (blocks, technology objects, PLC data types). One transaction, temporary names handled internally,
+  `dryRun` by default, fail-safe use reported from the cross references and gated by `allowFailsafe`.
+- __Tag comments__: `SetTagComment`, `ReplaceTagComments`.
+- __`ReplaceNetworkText`__ takes `find=replace` pairs applied in one pass (breaking: replaces the
+  `find` / `replace` parameters) and a `scope` of `networks` or `all` (block title and comment,
+  GRAPH step titles, transition and sequence comments).
+- __`CompileBlock`__: compile one block or one block group; fail-safe blocks are refused.
+- __`RenameWatchTableGroup`__, and watch tables with `/` in their name are found.
+- Export -> edit -> import tools state in their message when objects could not be exported and were
+  therefore not checked for references.
+
+### Fixed (ANet fork, 0.2.0.2)
+
+- __`GetProject`__ failed with the SDK's generic error on projects whose attributes hold Openness
+  objects; such values are now reported as text. Not yet confirmed against the project it was seen on.
+
 ### Changed
 
 - __`Portal` partial classes consolidated__: the 18 `Portal.*.cs` files are now `Portal.cs`,

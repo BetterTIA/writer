@@ -15,17 +15,44 @@ namespace TiaMcpServer.ModelContextProtocol
             {
                 foreach (var attr in obj.GetAttributeInfos())
                 {
-                    object value = obj.GetAttribute(attr.Name);
                     attributes.Add(new Attribute
                     {
                         Name = attr.Name,
-                        Value = value,
+                        Value = ReadValue(obj, attr.Name),
                         AccessMode = Enum.GetName(typeof(EngineeringAttributeAccessMode), attr.AccessMode)
                     });
                 }
             }
 
             return attributes;
+        }
+
+        /// <summary>
+        /// An attribute value in a form the JSON serializer can always write. A project carries
+        /// attributes whose value is an Openness object (a MultilingualText, a language); those
+        /// reach back into the whole project when serialized and made 'GetProject' fail with the
+        /// SDK's generic error. Simple values pass through unchanged.
+        /// </summary>
+        private static object? ReadValue(IEngineeringObject obj, string name)
+        {
+            object? value;
+
+            try
+            {
+                value = obj.GetAttribute(name);
+            }
+            catch (Exception ex)
+            {
+                return $"<not readable: {ex.Message}>";
+            }
+
+            if (value == null || value is string || value is decimal || value is DateTime || value is DateTimeOffset
+                || value is TimeSpan || value is Guid || value.GetType().IsPrimitive || value.GetType().IsEnum)
+            {
+                return value;
+            }
+
+            return value is MultilingualText text ? FirstText(text) : value.ToString();
         }
 
         /// <summary>

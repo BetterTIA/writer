@@ -1,8 +1,11 @@
 using Siemens.Engineering;
+using Siemens.Engineering.Compiler;
+using Siemens.Engineering.CrossReference;
 using Siemens.Engineering.SW.Blocks;
 using Siemens.Engineering.SW.Tags;
 using Siemens.Engineering.SW.TechnologicalObjects;
 using Siemens.Engineering.SW.Types;
+using Siemens.Engineering.SW.WatchAndForceTables;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -39,6 +42,40 @@ namespace TiaMcpServer.Siemens
 
         /// <summary>Objects TIA Portal would not export, so references inside them were not seen.</summary>
         public List<string> NotScanned { get; set; } = new List<string>();
+    }
+
+    /// <summary>One object of a batch rename, with what the rename would touch in the safety program.</summary>
+    public sealed class BatchRenameItem
+    {
+        /// <summary>'tag', 'block', 'type' or 'technologicalObject'.</summary>
+        public string Kind { get; set; } = string.Empty;
+
+        public string Path { get; set; } = string.Empty;
+
+        public string OldName { get; set; } = string.Empty;
+
+        public string NewName { get; set; } = string.Empty;
+
+        /// <summary>True when the object itself is a fail-safe block.</summary>
+        public bool Failsafe { get; set; }
+
+        /// <summary>
+        /// Fail-safe blocks that refer to the object, from the cross references. Openness has no
+        /// 'safety tag' attribute, so this is what marks a tag as safety relevant.
+        /// </summary>
+        public List<string> UsedByFailsafe { get; set; } = new List<string>();
+
+        /// <summary>Number of objects that refer to it, fail-safe or not.</summary>
+        public int UserCount { get; set; }
+    }
+
+    public sealed class BatchRenameResult
+    {
+        public bool Applied { get; set; }
+
+        public List<BatchRenameItem> Items { get; set; } = new List<BatchRenameItem>();
+
+        public List<string> Warnings { get; set; } = new List<string>();
     }
 
     public partial class Portal
@@ -132,6 +169,40 @@ namespace TiaMcpServer.Siemens
                 ("softwarePath", softwarePath), ("groupPath", groupPath), ("newName", newName));
         }
 
+        private List<TechnologicalInstanceDB> GetTechnologicalObjects(string softwarePath)
+        {
+            var objects = new List<TechnologicalInstanceDB>();
+
+            WalkRecursive<TechnologicalInstanceDBGroup, TechnologicalInstanceDB>(
+                GetPlcSoftwareOrThrow(softwarePath).TechnologicalObjectGroup,
+                objects, g => g.TechnologicalObjects, g => g.Groups, t => t.Name);
+
+            return objects;
+        }
+
+        public bool RenameWatchTableGroup(string softwarePath, string groupPath, string newName)
+        {
+            return Operation.Run(_logger, nameof(RenameWatchTableGroup), PortalErrorCode.RenameFailed,
+                () =>
+                {
+                    EnsureValidName(newName);
+
+                    var group = GetWatchTableGroupByPath(softwarePath, groupPath)
+                        ?? throw new PortalException(PortalErrorCode.NotFound,
+                            $"Watch table group not found at '{groupPath}'. Use 'GetSoftwareTree' to discover valid group paths.");
+
+                    var userGroup = group as PlcWatchAndForceTableUserGroup
+                        ?? throw new PortalException(PortalErrorCode.NotSupported,
+                            $"'{groupPath}' is the system group 'Watch and force tables', which cannot be renamed.");
+
+                    EnsureFreeName(((PlcWatchAndForceTableGroup)userGroup.Parent).Groups.Select(g => g.Name), userGroup.Name, newName, "watch table group");
+                    userGroup.Name = newName;
+
+                    return true;
+                },
+                ("softwarePath", softwarePath), ("groupPath", groupPath), ("newName", newName));
+        }
+
         /// <param name="name">Name of the technology object; they are unique within a PLC, so no path is needed.</param>
         public bool RenameTechnologicalObject(string softwarePath, string name, string newName)
         {
@@ -140,11 +211,7 @@ namespace TiaMcpServer.Siemens
                 {
                     EnsureValidName(newName);
 
-                    var objects = new List<TechnologicalInstanceDB>();
-
-                    WalkRecursive<TechnologicalInstanceDBGroup, TechnologicalInstanceDB>(
-                        GetPlcSoftwareOrThrow(softwarePath).TechnologicalObjectGroup,
-                        objects, g => g.TechnologicalObjects, g => g.Groups, t => t.Name);
+                    var objects = GetTechnologicalObjects(softwarePath);
 
                     var technologicalObject = objects.FirstOrDefault(t => t.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
                         ?? throw new PortalException(PortalErrorCode.NotFound,
@@ -410,6 +477,334 @@ namespace TiaMcpServer.Siemens
             }
 
             return !isKnowHowProtected && isConsistent;
+        }
+
+        #endregion
+
+        #region batch rename
+
+        /// <summary>An object of a batch: what to report, how to rename it, where its cross references come from.</summary>
+        private sealed class Renamable
+        {
+            public BatchRenameItem Info = new BatchRenameItem();
+            public Action<string> SetName = _ => { };
+            public object? Source;
+        }
+
+        /// <summary>Names of the objects that refer to <paramref name="source"/>, from its cross references.</summary>
+        private static List<string> UsersOf(object? source)
+        {
+            var service = (source as IEngineeringServiceProvider)?.GetService<CrossReferenceService>();
+
+            return service == null
+                ? new List<string>()
+                : service.GetCrossReferences(CrossReferenceFilter.AllObjects).Sources
+                    .SelectMany(s => s.References)
+                    .Select(r => r.Name)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+        }
+
+        /// <summary>
+        /// Shared tail of the batch renames: plans the order (BatchRename.Plan), reports which
+        /// fail-safe blocks each object is used by and, unless this is a dry run, sets the names.
+        /// </summary>
+        private BatchRenameResult RenameBatch(string softwarePath, List<Renamable> items, IEnumerable<string> allNames, bool dryRun, bool allowFailsafe)
+        {
+            var steps = BatchRename.Plan(
+                items.Select(i => i.Info.OldName).ToList(), items.Select(i => i.Info.NewName).ToList(), allNames);
+            var failsafeBlocks = new HashSet<string>(GetBlocks(softwarePath).Where(IsFailsafe).Select(b => b.Name), StringComparer.OrdinalIgnoreCase);
+            var result = new BatchRenameResult { Items = items.Select(i => i.Info).ToList() };
+
+            foreach (var item in items)
+            {
+                try
+                {
+                    var users = UsersOf(item.Source);
+
+                    item.Info.UserCount = users.Count;
+                    item.Info.UsedByFailsafe = users.Where(failsafeBlocks.Contains).ToList();
+                }
+                catch (Exception ex)
+                {
+                    // Not knowing must not read as "not used by the safety program".
+                    item.Info.UsedByFailsafe = new List<string> { "unknown" };
+                    result.Warnings.Add($"'{item.Info.OldName}': cross references could not be read ({ex.Message}), so its use in fail-safe blocks is unknown.");
+                }
+            }
+
+            var safety = items.Where(i => i.Info.Failsafe || i.Info.UsedByFailsafe.Count > 0).Select(i => i.Info.OldName).ToList();
+
+            if (safety.Count > 0)
+            {
+                result.Warnings.Add(
+                    $"{safety.Count} object(s) are fail-safe blocks or used by fail-safe blocks: {string.Join(", ", safety)}. " +
+                    "Renaming them changes the safety program, which then has to be compiled and accepted again by the operator.");
+            }
+
+            if (dryRun || steps.Count == 0)
+            {
+                return result;
+            }
+
+            if (safety.Count > 0 && !allowFailsafe)
+            {
+                throw new PortalException(PortalErrorCode.InvalidState,
+                    $"This would change the safety program through: {string.Join(", ", safety)}. Review the dry run with the operator and " +
+                    "repeat with allowFailsafe=true if that is intended, or leave those objects out of the batch.");
+            }
+
+            foreach (var (index, name) in steps)
+            {
+                items[index].SetName(name);
+            }
+
+            result.Applied = true;
+
+            return result;
+        }
+
+        /// <summary>
+        /// Renames PLC tags by name, across all tag tables, in one transaction. The new names may
+        /// be names other tags of the batch hold now, so a swap needs no temporary name from the
+        /// caller. Tag names are unique within a PLC, which is why no table path is needed.
+        /// </summary>
+        /// <param name="renames">Current tag name to new tag name.</param>
+        public BatchRenameResult RenameTags(string softwarePath, IDictionary<string, string> renames, bool dryRun = true, bool allowFailsafe = false)
+        {
+            return Operation.Run(_logger, nameof(RenameTags), PortalErrorCode.RenameFailed,
+                () =>
+                {
+                    var tags = GetTags(softwarePath);
+                    var items = new List<Renamable>();
+                    var missing = new List<string>();
+
+                    foreach (var rename in renames)
+                    {
+                        EnsureValidName(rename.Value, allowSlash: true);
+
+                        var tag = tags.FirstOrDefault(t => t.Name.Equals(rename.Key, StringComparison.OrdinalIgnoreCase));
+
+                        if (tag == null)
+                        {
+                            missing.Add(rename.Key);
+                            continue;
+                        }
+
+                        items.Add(new Renamable
+                        {
+                            Info = new BatchRenameItem
+                            {
+                                Kind = "tag",
+                                Path = tag.Parent is PlcTagTable table ? $"{GetTagTablePath(table)}/{tag.Name}" : tag.Name,
+                                OldName = tag.Name,
+                                NewName = rename.Value
+                            },
+                            SetName = name => tag.Name = name,
+                            Source = tag
+                        });
+                    }
+
+                    if (missing.Count > 0)
+                    {
+                        throw new PortalException(PortalErrorCode.NotFound,
+                            $"No PLC tag named: {string.Join(", ", missing)}. Use 'GetTags' to list the available tags.");
+                    }
+
+                    return RenameBatch(softwarePath, items, tags.Select(t => t.Name), dryRun, allowFailsafe);
+                },
+                ("softwarePath", softwarePath), ("count", renames.Count), ("dryRun", dryRun));
+        }
+
+        /// <summary>
+        /// Renames blocks, technology objects and PLC data types by name in one transaction, with
+        /// the same swap support as <see cref="RenameTags"/>. A name is looked up among the
+        /// blocks first, then the technology objects, then the types.
+        /// </summary>
+        public BatchRenameResult RenameObjects(string softwarePath, IDictionary<string, string> renames, bool dryRun = true, bool allowFailsafe = false)
+        {
+            return Operation.Run(_logger, nameof(RenameObjects), PortalErrorCode.RenameFailed,
+                () =>
+                {
+                    var blocks = GetBlocks(softwarePath);
+                    var objects = GetTechnologicalObjects(softwarePath);
+                    var types = GetTypes(softwarePath);
+                    var items = new List<Renamable>();
+                    var missing = new List<string>();
+
+                    foreach (var rename in renames)
+                    {
+                        EnsureValidName(rename.Value);
+
+                        bool Named(string name) => name.Equals(rename.Key, StringComparison.OrdinalIgnoreCase);
+
+                        var info = new BatchRenameItem { NewName = rename.Value };
+
+                        if (blocks.FirstOrDefault(b => Named(b.Name)) is PlcBlock block)
+                        {
+                            EnsureNotKnowHowProtected(block);
+                            info.Kind = "block";
+                            info.Path = GetBlockPath(block);
+                            info.OldName = block.Name;
+                            info.Failsafe = IsFailsafe(block);
+                            items.Add(new Renamable { Info = info, SetName = name => block.Name = name, Source = block });
+                        }
+                        else if (objects.FirstOrDefault(t => Named(t.Name)) is TechnologicalInstanceDB technologicalObject)
+                        {
+                            info.Kind = "technologicalObject";
+                            info.Path = technologicalObject.Name;
+                            info.OldName = technologicalObject.Name;
+                            items.Add(new Renamable { Info = info, SetName = name => technologicalObject.Name = name, Source = technologicalObject });
+                        }
+                        else if (types.FirstOrDefault(t => Named(t.Name)) is PlcType type)
+                        {
+                            EnsureNotKnowHowProtected(type);
+                            info.Kind = "type";
+                            info.Path = GetTypePath(type);
+                            info.OldName = type.Name;
+                            items.Add(new Renamable { Info = info, SetName = name => type.Name = name, Source = type });
+                        }
+                        else
+                        {
+                            missing.Add(rename.Key);
+                        }
+                    }
+
+                    if (missing.Count > 0)
+                    {
+                        throw new PortalException(PortalErrorCode.NotFound,
+                            $"No block, technology object or PLC data type named: {string.Join(", ", missing)}.");
+                    }
+
+                    return RenameBatch(softwarePath, items,
+                        blocks.Select(b => b.Name).Concat(objects.Select(t => t.Name)).Concat(types.Select(t => t.Name)),
+                        dryRun, allowFailsafe);
+                },
+                ("softwarePath", softwarePath), ("count", renames.Count), ("dryRun", dryRun));
+        }
+
+        #endregion
+
+        #region tag comments
+
+        /// <summary>
+        /// Runs <paramref name="edit"/> over the comment of every tag of a table (or of all
+        /// tables) and writes back what it changed. A comment has one text per project language.
+        /// </summary>
+        /// <param name="tagTablePath">Empty covers every tag table of the PLC.</param>
+        /// <param name="culture">Empty covers every language.</param>
+        public List<XmlChange> EditTagComments(string softwarePath, string tagTablePath, Func<string, string> edit, string culture = "", bool dryRun = true)
+        {
+            return Operation.Run(_logger, nameof(EditTagComments), PortalErrorCode.RenameFailed,
+                () => EditComments(GetTags(softwarePath, tagTablePath), edit, culture, dryRun),
+                ("softwarePath", softwarePath), ("tagTablePath", tagTablePath), ("dryRun", dryRun));
+        }
+
+        public List<XmlChange> SetTagComment(string softwarePath, string tagPath, string comment, string culture = "")
+        {
+            return Operation.Run(_logger, nameof(SetTagComment), PortalErrorCode.RenameFailed,
+                () =>
+                {
+                    var tag = GetTag(softwarePath, tagPath)
+                        ?? throw new PortalException(PortalErrorCode.NotFound,
+                            $"Tag not found at '{tagPath}'. Use 'GetTags' to list the available tags.");
+
+                    var cultures = tag.Comment.Items.Select(i => i.Language.Culture.Name).ToList();
+
+                    if (string.IsNullOrEmpty(culture) ? cultures.Count != 1 : !cultures.Contains(culture, StringComparer.OrdinalIgnoreCase))
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidParams,
+                            $"The comment exists in {cultures.Count} language(s) ({string.Join(", ", cultures)}); pass one of them as 'culture'.");
+                    }
+
+                    return EditComments(new[] { tag }, _ => comment, culture, false);
+                },
+                ("softwarePath", softwarePath), ("tagPath", tagPath));
+        }
+
+        private static List<XmlChange> EditComments(IEnumerable<PlcTag> tags, Func<string, string> edit, string culture, bool dryRun)
+        {
+            var changes = new List<XmlChange>();
+
+            foreach (var tag in tags)
+            {
+                foreach (var item in tag.Comment.Items)
+                {
+                    var language = item.Language.Culture.Name;
+                    var oldText = item.Text ?? string.Empty;
+
+                    if (!string.IsNullOrEmpty(culture) && !language.Equals(culture, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var newText = edit(oldText);
+
+                    if (newText == oldText)
+                    {
+                        continue;
+                    }
+
+                    changes.Add(new XmlChange { Object = tag.Name, Where = $"comment [{language}]", Old = oldText, New = newText });
+
+                    if (!dryRun)
+                    {
+                        item.Text = newText;
+                    }
+                }
+            }
+
+            return changes;
+        }
+
+        #endregion
+
+        #region compile
+
+        /// <summary>
+        /// Compiles one block, or every block of one block group, instead of the whole PLC
+        /// software - enough to make the callers of a renamed block consistent again. Fail-safe
+        /// blocks are refused: compiling the safety program stays with the operator.
+        /// </summary>
+        /// <param name="path">Root-relative path of a block or of a block group.</param>
+        public CompilerResult CompileBlocks(string softwarePath, string path)
+        {
+            return Operation.Run(_logger, nameof(CompileBlocks), PortalErrorCode.InvalidState,
+                () =>
+                {
+                    IEngineeringServiceProvider target;
+                    var covered = new List<PlcBlock>();
+
+                    if (GetBlock(softwarePath, path) is PlcBlock block)
+                    {
+                        target = block;
+                        covered.Add(block);
+                    }
+                    else
+                    {
+                        var group = GetPlcBlockGroupByPath(softwarePath, path)
+                            ?? throw new PortalException(PortalErrorCode.NotFound,
+                                $"No block or block group found at '{path}'. Use 'GetSoftwareTree' to discover valid paths.");
+
+                        target = group;
+                        GetBlocksRecursive(group, covered);
+                    }
+
+                    var failsafe = covered.Where(IsFailsafe).Select(GetBlockPath).ToList();
+
+                    if (failsafe.Count > 0)
+                    {
+                        throw new PortalException(PortalErrorCode.NotSupported,
+                            $"'{path}' covers fail-safe block(s): {string.Join(", ", failsafe)}. Compiling the safety program is left to the operator; " +
+                            "compile the standard blocks one by one instead.");
+                    }
+
+                    var compiler = target.GetService<ICompilable>()
+                        ?? throw new PortalException(PortalErrorCode.NotSupported, $"'{path}' cannot be compiled on its own.");
+
+                    return compiler.Compile();
+                },
+                ("softwarePath", softwarePath), ("path", path));
         }
 
         #endregion

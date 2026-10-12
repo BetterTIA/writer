@@ -386,7 +386,13 @@ namespace TiaMcpServer.Siemens
                 {
                     var (groupPath, tableName) = SplitPath(watchTablePath);
 
-                    return GetWatchTableGroupByPath(softwarePath, groupPath)?.WatchTables.Find(tableName);
+                    // Same fallback as GetTagTable: a name may itself contain '/'.
+                    return GetWatchTableGroupByPath(softwarePath, groupPath)?.WatchTables.Find(tableName)
+                        ?? PathMatch.ByPrefix<PlcWatchAndForceTableGroup, PlcWatchTable>(
+                                GetPlcSoftwareOrThrow(softwarePath).WatchAndForceTableGroup,
+                                (watchTablePath ?? string.Empty).Replace('\\', '/').Trim().Trim('/'),
+                                g => g.WatchTables, g => g.Groups, t => t.Name, g => g.Name)
+                            .Where(m => m.Tail.Length == 0).Select(m => m.Item).FirstOrDefault();
                 },
                 ("softwarePath", softwarePath), ("watchTablePath", watchTablePath));
         }
@@ -732,7 +738,7 @@ namespace TiaMcpServer.Siemens
             return Operation.Run(_logger, nameof(RenameWatchTable), PortalErrorCode.RenameFailed,
                 () =>
                 {
-                    EnsureValidName(newName);
+                    EnsureValidName(newName, allowSlash: true);
                     RequireWatchTable(softwarePath, watchTablePath).Name = newName;
                     return true;
                 },

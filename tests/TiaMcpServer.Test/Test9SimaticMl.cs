@@ -59,6 +59,9 @@ namespace TiaMcpServer.Test
         private static Dictionary<string, string> Renames(string renames) =>
             new Dictionary<string, string>(McpServer.ParseRenames(renames));
 
+        private static IDictionary<string, string> Texts(string replacements) =>
+            McpServer.ParseRenames(replacements, StringComparer.Ordinal);
+
         /// <summary>Every operand of the document as "A.B.C", in document order.</summary>
         private static List<string> Operands(XDocument doc) =>
             doc.Descendants()
@@ -100,12 +103,52 @@ namespace TiaMcpServer.Test
             var doc = Doc("SW.Blocks.FB", "FB_Pumps", "",
                 Network(Lad(""), "Pump 1 start", "Starts pump 1") + Network(Lad(""), "Valve", "unrelated"));
 
-            var changes = SimaticMl.ReplaceNetworkText(doc, "ump 1", "ump 2", "");
+            var changes = SimaticMl.ReplaceNetworkText(doc, Texts("ump 1=ump 2"), "");
 
             Assert.AreEqual(2, changes.Count);
             CollectionAssert.AreEqual(
                 new[] { "Starts pump 2", "Pump 2 start", "unrelated", "Valve" },
                 doc.Descendants("Text").Select(t => t.Value).ToList());
+        }
+
+        [TestMethod]
+        public void ReplaceAll_SwapsInOnePassAndPrefersTheLongerMatch()
+        {
+            var pairs = Texts("Pump 1=Pump 2; Pump 2=Pump 1; Pump 10=Pump 20");
+
+            Assert.AreEqual("Pump 2, Pump 1, Pump 20, pump 1", SimaticMl.ReplaceAll("Pump 1, Pump 2, Pump 10, pump 1", pairs));
+            Assert.ThrowsException<PortalException>(() => SimaticMl.ReplaceAll("x", new Dictionary<string, string>()));
+        }
+
+        [TestMethod]
+        public void ReplaceNetworkText_ScopeAll_AddsBlockTextsAndGraphTextsButNotStepNames()
+        {
+            var graph =
+                $"<Graph xmlns=\"{GraphNs}\"><Sequence><Comment><MultiLanguageText Lang=\"en-US\">Pump 1 sequence</MultiLanguageText></Comment>" +
+                "<Steps><Step Number=\"3\" Name=\"Pump 1 on\"><Actions><Title><MultiLanguageText Lang=\"en-US\">Start pump 1</MultiLanguageText></Title>" +
+                "</Actions></Step></Steps><Transitions><Transition Number=\"4\" Name=\"T4\">" +
+                "<Comment><MultiLanguageText Lang=\"en-US\">pump 1 runs</MultiLanguageText></Comment></Transition></Transitions></Sequence></Graph>";
+            string Build() => Doc("SW.Blocks.FB", "FB_Sequence",
+                Section("Static", Member("X", "Bool", "<Comment><MultiLanguageText Lang=\"en-US\">pump 1 flag</MultiLanguageText></Comment>")),
+                Text("Comment", "Controls pump 1") + Text("Title", "pump 1") + Network(graph, "pump 1 steps")).ToString();
+            var networksOnly = XDocument.Parse(Build());
+            var all = XDocument.Parse(Build());
+
+            var few = SimaticMl.ReplaceNetworkText(networksOnly, Texts("ump 1=ump 2"), "");
+            var many = SimaticMl.ReplaceNetworkText(all, Texts("ump 1=ump 2"), "", all: true);
+
+            CollectionAssert.AreEqual(new[] { "network 1 Title [en-US]" }, few.Select(c => c.Where).ToList());
+            CollectionAssert.AreEquivalent(
+                new[]
+                {
+                    "block Comment [en-US]", "block Title [en-US]", "network 1 Title [en-US]",
+                    "network 1 sequence Comment [en-US]", "network 1 step 3 Title [en-US]", "network 1 transition 4 Comment [en-US]"
+                },
+                many.Select(c => c.Where).ToList());
+
+            // A step name is an interface member, and a member comment is not a network text.
+            StringAssert.Contains(all.ToString(), "Name=\"Pump 1 on\"");
+            StringAssert.Contains(all.ToString(), "pump 1 flag");
         }
 
         #endregion
@@ -279,6 +322,52 @@ namespace TiaMcpServer.Test
             Assert.AreEqual("Velocity", renames["Speed"]);
             Assert.AreEqual("Max", renames["Config.Limit"]);
             Assert.ThrowsException<global::ModelContextProtocol.McpException>(() => McpServer.ParseRenames("Speed"));
+        }
+
+        #endregion
+
+        #region batch rename order
+
+        /// <summary>Carries a plan out on a name list the way the setters would, failing on a clash.</summary>
+        private static List<string> Apply(List<string> names, IList<string> oldNames, IList<string> newNames)
+        {
+            var index = oldNames.Select(o => names.FindIndex(n => n == o)).ToList();
+
+            foreach (var (item, name) in BatchRename.Plan(oldNames, newNames, names.ToList()))
+            {
+                Assert.IsFalse(names.Where((n, i) => i != index[item]).Contains(name, StringComparer.OrdinalIgnoreCase), $"'{name}' is still taken");
+                names[index[item]] = name;
+            }
+
+            return names;
+        }
+
+        [TestMethod]
+        public void BatchRename_SwapRotationAndChain_NeverHitATakenName()
+        {
+            CollectionAssert.AreEqual(
+                new[] { "B", "A", "Other" },
+                Apply(new List<string> { "A", "B", "Other" }, new[] { "A", "B" }, new[] { "B", "A" }));
+            CollectionAssert.AreEqual(
+                new[] { "B", "C", "A" },
+                Apply(new List<string> { "A", "B", "C" }, new[] { "A", "B", "C" }, new[] { "B", "C", "A" }));
+            CollectionAssert.AreEqual(
+                new[] { "B", "C" },
+                Apply(new List<string> { "A", "B" }, new[] { "A", "B" }, new[] { "B", "C" }));
+            CollectionAssert.AreEqual(
+                new[] { "a", "B" },
+                Apply(new List<string> { "A", "B" }, new[] { "A" }, new[] { "a" }));
+        }
+
+        [TestMethod]
+        public void BatchRename_CollisionOutsideTheBatchOrDuplicate_Throws()
+        {
+            var names = new[] { "A", "B", "Other" };
+
+            Assert.ThrowsException<PortalException>(() => BatchRename.Plan(new[] { "A" }, new[] { "other" }, names));
+            Assert.ThrowsException<PortalException>(() => BatchRename.Plan(new[] { "A", "B" }, new[] { "X", "x" }, names));
+            Assert.ThrowsException<PortalException>(() => BatchRename.Plan(new[] { "A", "a" }, new[] { "X", "Y" }, names));
+            Assert.AreEqual(0, BatchRename.Plan(new[] { "A" }, new[] { "A" }, names).Count);
         }
 
         #endregion
