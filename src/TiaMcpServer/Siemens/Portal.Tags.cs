@@ -5,6 +5,7 @@ using Siemens.Engineering.SW.WatchAndForceTables;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace TiaMcpServer.Siemens
@@ -134,9 +135,20 @@ namespace TiaMcpServer.Siemens
                     var (groupPath, tableName) = SplitPath(tagTablePath);
                     var group = GetTagTableGroupByPath(softwarePath, groupPath);
 
-                    return group?.TagTables.Find(tableName);
+                    // A table or group name may itself contain '/', which SplitPath cannot see.
+                    return group?.TagTables.Find(tableName)
+                        ?? TagTablesByPrefix(softwarePath, tagTablePath).Where(m => m.Tail.Length == 0).Select(m => m.Item).FirstOrDefault();
                 },
                 ("softwarePath", softwarePath), ("tagTablePath", tagTablePath));
+        }
+
+        private IEnumerable<(PlcTagTable Item, string Tail)> TagTablesByPrefix(string softwarePath, string path)
+        {
+            var root = GetPlcSoftwareOrThrow(softwarePath).TagTableGroup;
+
+            return PathMatch.ByPrefix<PlcTagTableGroup, PlcTagTable>(
+                root, (path ?? string.Empty).Replace('\\', '/').Trim().Trim('/'),
+                g => g.TagTables, g => g.Groups, t => t.Name, g => g.Name);
         }
 
         /// <summary>
@@ -204,11 +216,18 @@ namespace TiaMcpServer.Siemens
                             $"'{tagPath}' does not name a tag table. Use 'TableName/TagName', or 'Group/TableName/TagName'.");
                     }
 
-                    var table = GetTagTable(softwarePath, tablePath)
-                        ?? throw new PortalException(PortalErrorCode.NotFound,
-                            $"Tag table not found at '{tablePath}'. Use 'GetTagTables' to list the available tables.");
+                    var table = GetTagTable(softwarePath, tablePath);
 
-                    return table.Tags.Find(tagName);
+                    // Falls back to whole-name matching for a '/' inside the table, group or tag name.
+                    return table?.Tags.Find(tagName)
+                        ?? TagTablesByPrefix(softwarePath, tagPath)
+                            .Where(m => m.Tail.Length > 0)
+                            .Select(m => m.Item.Tags.Find(m.Tail))
+                            .FirstOrDefault(t => t != null)
+                        ?? (table != null
+                            ? null
+                            : throw new PortalException(PortalErrorCode.NotFound,
+                                $"Tag table not found at '{tablePath}'. Use 'GetTagTables' to list the available tables."));
                 },
                 ("softwarePath", softwarePath), ("tagPath", tagPath));
         }
@@ -495,7 +514,7 @@ namespace TiaMcpServer.Siemens
             return Operation.Run(_logger, nameof(RenameTagTable), PortalErrorCode.RenameFailed,
                 () =>
                 {
-                    EnsureValidName(newName);
+                    EnsureValidName(newName, allowSlash: true);
                     RequireTagTable(softwarePath, tagTablePath).Name = newName;
                     return true;
                 },
@@ -609,7 +628,7 @@ namespace TiaMcpServer.Siemens
 
                     if (newName != null)
                     {
-                        EnsureValidName(newName);
+                        EnsureValidName(newName, allowSlash: true);
                         tag.Name = newName;
                     }
 

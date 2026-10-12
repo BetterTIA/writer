@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Added (ANet fork, branch `anet`, 0.2.0.1)
+
+- __Group and technology object renames__: `RenameBlockGroup`, `RenameTypeGroup`, `RenameTagTableGroup`,
+  `RenameTechnologicalObject` (setter `Name`, sibling collision rejected).
+- __Network titles and comments__: `SetNetworkText`, `ReplaceNetworkText` (export, edit the SimaticML,
+  import; `dryRun` defaults to true).
+- __Member rename__: `RenameMembers` for block interface, DB and PLC data type members including the
+  references in all blocks (export of every block and type, type-resolved edit, import; `dryRun`
+  defaults to true; fail-safe blocks need `allowFailsafe`).
+- __Tag tables with `/` in their name__ are found by every tool that takes a tag table or tag path,
+  and `RenameTagTable` / `UpdateTag` accept such a name.
+- Details, limits and what is not verified against a running TIA Portal: [ANET.md](ANET.md).
+
 ### Changed
 
 - __`Portal` partial classes consolidated__: the 18 `Portal.*.cs` files are now `Portal.cs`,

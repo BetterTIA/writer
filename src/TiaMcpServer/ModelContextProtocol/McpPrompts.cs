@@ -4,7 +4,7 @@ using System.ComponentModel;
 namespace TiaMcpServer.ModelContextProtocol
 {
     [McpServerPromptType]
-    public static class McpPrompts
+    public static partial class McpPrompts
     {
         #region Basic Connection Templates
 

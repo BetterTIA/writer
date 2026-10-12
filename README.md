@@ -60,7 +60,9 @@ Read-only tools (62) are always available.
 | Type documents (V21+)         | `ExportTypeAsDocuments`, `ExportTypesAsDocuments`                                                                                                                                                      |
 | Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockSource`, `GetTypeSource`, `GetBlockInterface`, `PreviewImport`, `OpenTiaProject`, `ExportPlcAsDocuments`, `ExportSources` |
 
-Write tools (44) require `--allow-write`.
+Write tools (51) require `--allow-write`. Seven of them are additions of the ANet fork (`RenameBlockGroup`,
+`RenameTypeGroup`, `RenameTagTableGroup`, `RenameTechnologicalObject`, `SetNetworkText`,
+`ReplaceNetworkText`, `RenameMembers`) - see [ANET.md](ANET.md).
 
 | Area                  | Tools                                                                                                                                                   |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |

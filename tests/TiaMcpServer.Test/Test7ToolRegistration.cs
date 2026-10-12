@@ -27,6 +27,11 @@ namespace TiaMcpServer.Test
         {
             Engineering.TiaMajorVersion = Settings.TiaMajorVersion;
             Openness.Initialize(Engineering.TiaMajorVersion);
+
+            // Same fallback as Program.Main: without it the Siemens resolver leaves
+            // Siemens.Engineering.Step7 unresolved and every BuildTools test fails.
+            AppDomain.CurrentDomain.AssemblyResolve -= Engineering.Resolver;
+            AppDomain.CurrentDomain.AssemblyResolve += Engineering.Resolver;
         }
 
         [TestMethod]

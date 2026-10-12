@@ -514,12 +514,16 @@ namespace TiaMcpServer.ModelContextProtocol
         public static ResponseRenamed RenameTagTable(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("tagTablePath: root-relative path of the tag table")] string tagTablePath,
-            [Description("newName: the new tag table name, without a slash")] string newName)
+            [Description("newName: the new tag table name")] string newName)
         {
             return Guarded(nameof(RenameTagTable), () =>
             {
+                // The path is read back from the table: its name may contain '/', so it cannot be split textually.
+                var table = Portal.GetTagTable(softwarePath, tagTablePath);
+
                 Portal.RenameTagTable(softwarePath, tagTablePath, newName);
-                return Renamed("Tag table", tagTablePath, newName, ReplaceLeaf(tagTablePath, newName));
+                return Renamed("Tag table", tagTablePath, newName,
+                    table != null ? Portal.GetTagTablePath(table) : ReplaceLeaf(tagTablePath, newName));
             });
         }
 
@@ -595,7 +599,7 @@ namespace TiaMcpServer.ModelContextProtocol
         public static ResponseRenamed UpdateTag(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("tagPath: path of the tag including its table, e.g. TagGroup1/Table1/Tag_1")] string tagPath,
-            [Description("newName: optional new tag name, without a slash")] string? newName = null,
+            [Description("newName: optional new tag name")] string? newName = null,
             [Description("dataTypeName: optional new PLC data type")] string? dataTypeName = null,
             [Description("logicalAddress: optional new absolute address")] string? logicalAddress = null,
             [Description("externalAccessible: optional new value for accessibility from HMI/OPC UA")] bool? externalAccessible = null,
@@ -604,10 +608,13 @@ namespace TiaMcpServer.ModelContextProtocol
         {
             return Guarded(nameof(UpdateTag), () =>
             {
+                // Read back from the tag for the same reason as in RenameTagTable.
+                var tag = Portal.GetTag(softwarePath, tagPath);
+
                 Portal.UpdateTag(softwarePath, tagPath, newName, dataTypeName, logicalAddress,
                                  externalAccessible, externalVisible, externalWritable);
 
-                var newPath = newName == null ? tagPath : ReplaceLeaf(tagPath, newName);
+                var newPath = tag?.Parent is PlcTagTable table ? $"{Portal.GetTagTablePath(table)}/{tag.Name}" : tagPath;
 
                 return new ResponseRenamed
                 {

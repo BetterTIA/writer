@@ -493,14 +493,15 @@ namespace TiaMcpServer.Siemens
                     $"'{groupPath}' is the system group 'PLC data types', which cannot be created, renamed or deleted.");
         }
 
-        private static void EnsureValidName(string name)
+        /// <param name="allowSlash">Tag tables and tags may carry a '/' in their name; groups, blocks and types are addressed by path and may not.</param>
+        private static void EnsureValidName(string name, bool allowSlash = false)
         {
             if (string.IsNullOrWhiteSpace(name))
             {
                 throw new PortalException(PortalErrorCode.InvalidParams, "The name must not be empty.");
             }
 
-            if (name.Contains("/"))
+            if (!allowSlash && name.Contains("/"))
             {
                 throw new PortalException(PortalErrorCode.InvalidParams,
                     $"'{name}' must be a plain name, not a path: '/' separates path segments.");
