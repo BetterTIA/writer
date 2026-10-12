@@ -29,6 +29,12 @@
 - Export -> edit -> import tools state in their message when objects could not be exported and were
   therefore not checked for references.
 
+### Changed (ANet fork, 0.2.0.4)
+
+- __`CompileBlock`__ reads `IsConsistent` of the compiled blocks afterwards and names those that are
+  still inconsistent. Seen live: the compiler reported success with no errors for a caller of
+  renamed technology objects, yet the block stayed inconsistent until the whole software was compiled.
+
 ### Fixed (ANet fork, 0.2.0.3)
 
 - __`RenameTags` / `RenameObjects`__: the fail-safe check read only the top level of the cross

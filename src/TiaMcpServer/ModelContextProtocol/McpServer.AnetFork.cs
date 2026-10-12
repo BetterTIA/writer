@@ -358,14 +358,14 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [McpServerTool(Name = "CompileBlock", Title = "Compile block or block group", Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Compile one block, or every block of one block group, instead of the whole PLC software - enough to make the callers of a renamed block consistent again. A fail-safe block, or a group that contains one, is refused: compiling the safety program stays with the operator. Warnings are reported as a successful compile; only errors fail the call")]
+         Description("Compile one block, or every block of one block group, instead of the whole PLC software - enough to make the callers of a renamed block consistent again. A fail-safe block, or a group that contains one, is refused: compiling the safety program stays with the operator. Warnings are reported as a successful compile; only errors fail the call. The message names the blocks that are still inconsistent afterwards, which then need a compile of the whole software")]
         public static ResponseCompileSoftware CompileBlock(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("path: root-relative path of a block or of a block group, e.g. Station1/FB_Conveyor or Station1")] string path)
         {
             try
             {
-                var result = Portal.CompileBlocks(softwarePath, path);
+                var (result, inconsistent) = Portal.CompileBlocks(softwarePath, path);
                 var messages = FlattenCompilerMessages(result.Messages, 0).ToList();
                 var state = result.State.ToString();
 
@@ -381,12 +381,22 @@ namespace TiaMcpServer.ModelContextProtocol
 
                 return new ResponseCompileSoftware
                 {
-                    Message = $"Compiling '{path}' finished with state '{state}': {result.ErrorCount} error(s), {result.WarningCount} warning(s)",
+                    Message = $"Compiling '{path}' finished with state '{state}': {result.ErrorCount} error(s), {result.WarningCount} warning(s)" +
+                              (inconsistent.Count == 0
+                                  ? string.Empty
+                                  : $". WARNING: still inconsistent after the compile: {string.Join(", ", inconsistent)} - " +
+                                    "something they depend on needs compiling too; compile the whole software."),
                     State = state,
                     ErrorCount = result.ErrorCount,
                     WarningCount = result.WarningCount,
                     Messages = messages,
-                    Meta = Ok(new JsonObject { ["state"] = state, ["errorCount"] = result.ErrorCount, ["warningCount"] = result.WarningCount })
+                    Meta = Ok(new JsonObject
+                    {
+                        ["state"] = state,
+                        ["errorCount"] = result.ErrorCount,
+                        ["warningCount"] = result.WarningCount,
+                        ["stillInconsistent"] = inconsistent.Count
+                    })
                 };
             }
             catch (PortalException pex)

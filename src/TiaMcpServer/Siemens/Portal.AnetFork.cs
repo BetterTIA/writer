@@ -787,7 +787,12 @@ namespace TiaMcpServer.Siemens
         /// blocks are refused: compiling the safety program stays with the operator.
         /// </summary>
         /// <param name="path">Root-relative path of a block or of a block group.</param>
-        public CompilerResult CompileBlocks(string softwarePath, string path)
+        /// <returns>
+        /// The compiler result, and the blocks that are still inconsistent afterwards. The
+        /// compiler can report success and leave a block inconsistent - seen live on a caller of
+        /// renamed technology objects, which only a compile of the whole software cured.
+        /// </returns>
+        public (CompilerResult Result, List<string> Inconsistent) CompileBlocks(string softwarePath, string path)
         {
             return Operation.Run(_logger, nameof(CompileBlocks), PortalErrorCode.InvalidState,
                 () =>
@@ -822,7 +827,9 @@ namespace TiaMcpServer.Siemens
                     var compiler = target.GetService<ICompilable>()
                         ?? throw new PortalException(PortalErrorCode.NotSupported, $"'{path}' cannot be compiled on its own.");
 
-                    return compiler.Compile();
+                    var result = compiler.Compile();
+
+                    return (result, covered.Where(b => !b.IsConsistent).Select(GetBlockPath).ToList());
                 },
                 ("softwarePath", softwarePath), ("path", path));
         }

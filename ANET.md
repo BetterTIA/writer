@@ -1,6 +1,6 @@
 # ANet fork (TIAC_Writer)
 
-Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.0.3`.
+Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.0.4`.
 Local only - nothing is pushed.
 
 The fork adds what renaming objects in a real project needed and upstream did not have. All
@@ -25,7 +25,7 @@ listed at the end.
 | `SetTagComment`             | setter                 | comment of one tag                                                        |
 | `ReplaceTagComments`        | setter, batch          | `find=replace` pairs in one pass over a table or all tables; `dryRun`     |
 | `RenameWatchTableGroup`     | setter `Name`          | sibling group of the new name is rejected                                 |
-| `CompileBlock`              | `ICompilable`          | one block or one block group; refuses fail-safe blocks                    |
+| `CompileBlock`              | `ICompilable`          | one block or one block group; refuses fail-safe blocks; names what is still inconsistent afterwards |
 
 `RenameTagTable`, `UpdateTag`, `RenameWatchTable` and every tool that takes a tag table, tag or watch
 table path now also find tables whose name contains `/` (upstream split the path at the last `/`).
@@ -114,4 +114,4 @@ there. A Release build would overwrite, or fail on, the files of the running ser
 - `ModelContextProtocol/McpPrompts.cs`: class made `partial`.
 - `tests/TiaMcpServer.Test/Test7ToolRegistration.cs`: registers `Engineering.Resolver`, without
   which the `BuildTools` tests fail with "Siemens.Engineering.Step7 not found".
-- `TiaMcpServer.csproj`: `AssemblyVersion` 0.2.0.3, so `--doctor` tells the fork from the original.
+- `TiaMcpServer.csproj`: `AssemblyVersion` 0.2.0.4, so `--doctor` tells the fork from the original.
