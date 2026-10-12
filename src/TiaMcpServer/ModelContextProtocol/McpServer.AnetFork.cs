@@ -30,6 +30,29 @@ namespace TiaMcpServer.ModelContextProtocol
 
         /// <summary>Objects TIA Portal would not export, so references inside them were not seen.</summary>
         public IEnumerable<string>? NotScanned { get; set; }
+
+        /// <summary>Objects that are not edited but read the changed interface, so they turn inconsistent.</summary>
+        public IEnumerable<string>? Dependents { get; set; }
+
+        /// <summary>Fail-safe blocks among the dependents: the safety program has to be compiled again.</summary>
+        public IEnumerable<string>? FailsafeDependents { get; set; }
+    }
+
+    /// <summary>One technology object, as GetTechnologicalObjects lists it.</summary>
+    public class TechnologicalObjectInfo
+    {
+        public string? Name { get; set; }
+
+        /// <summary>Number of the data block behind the technology object.</summary>
+        public int? Number { get; set; }
+
+        /// <summary>Every attribute Openness reports for it, the object type and version among them.</summary>
+        public IEnumerable<Attribute>? Attributes { get; set; }
+    }
+
+    public class ResponseTechnologicalObjects : ResponseMessage
+    {
+        public IEnumerable<TechnologicalObjectInfo>? Items { get; set; }
     }
 
     /// <summary>Result of a batch rename (RenameTags, RenameObjects), for a dry run as well as for the real run.</summary>
@@ -129,6 +152,10 @@ namespace TiaMcpServer.ModelContextProtocol
 
             // References inside a block that could not be exported are invisible to the edit,
             // so this must not hide in a list at the end of the response.
+            var safety = result.FailsafeDependents.Count == 0
+                ? string.Empty
+                : $" WARNING: {result.FailsafeDependents.Count} fail-safe block(s) depend on the changed interface (see FailsafeDependents) - " +
+                  "the safety program will have to be compiled again; show this to the operator before applying.";
             var blind = result.NotScanned.Count == 0
                 ? string.Empty
                 : $" WARNING: {result.NotScanned.Count} object(s) could not be exported and were NOT checked for references " +
@@ -143,11 +170,13 @@ namespace TiaMcpServer.ModelContextProtocol
                 Changes = result.Changes.Take(MaxReportedChanges),
                 Warnings = result.Warnings,
                 NotScanned = result.NotScanned,
+                Dependents = result.Dependents,
+                FailsafeDependents = result.FailsafeDependents,
                 Message = (result.Changes.Count == 0
                     ? "Nothing to change."
                     : result.Applied
                         ? $"{summary} imported. Compile the software to verify. {SaveHint}"
-                        : $"Dry run: {summary} would be imported. Nothing was changed; repeat with dryRun=false to apply.") + blind,
+                        : $"Dry run: {summary} would be imported. Nothing was changed; repeat with dryRun=false to apply.") + safety + blind,
                 Meta = result.Applied ? OkMeta() : Ok()
             };
         }
@@ -203,7 +232,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "RenameMembers", Title = "Rename members of a block or type", Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true),
-         Description("Rename members of a block interface, a data block or a PLC data type, together with the references to them in all blocks. Openness has no setter for member names, so every block and type is exported, the affected ones are edited and imported back. Defaults to a dry run that lists the affected objects, every change and what could not be resolved, and imports nothing. Several renames in one call are applied together, so a swap is possible. Not updated: HMI tags, watch tables, technology objects. Start values and current values of a renamed member may be reset - back them up first")]
+         Description("Rename members of a block interface, a data block or a PLC data type, together with the references to them in all blocks. Openness has no setter for member names, so every block and type is exported, the affected ones are edited and imported back. Defaults to a dry run that lists the affected objects, every change and what could not be resolved, and imports nothing. Several renames in one call are applied together, so a swap is possible. Every block that reads a data block built from the owner turns inconsistent, also one that reads another member; they are listed as Dependents, and fail-safe blocks among them (FailsafeDependents) need allowFailsafe because the safety program must then be compiled again. Not updated: HMI tags, watch tables, technology objects. Start values and current values of a renamed member may be reset - back them up first")]
         public static ResponseXmlEdit RenameMembers(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("ownerPath: root-relative path of the block or PLC data type that declares the members")] string ownerPath,
@@ -252,6 +281,35 @@ namespace TiaMcpServer.ModelContextProtocol
         #endregion
 
         #region batch rename, tag comments, compile
+
+        [McpServerTool(Name = "GetTechnologicalObjects", Title = "Get technology objects", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
+         Description("List the technology objects (PID_Temp, axes, ...) of the PLC software with name, data block number and attributes - enough to check which name belongs to which number after a rename")]
+        public static ResponseTechnologicalObjects GetTechnologicalObjects(
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath)
+        {
+            try
+            {
+                var items = Portal.GetTechnologicalObjects(softwarePath)
+                    .Select(t => new TechnologicalObjectInfo { Name = t.Name, Number = t.Number, Attributes = Helper.GetAttributeList(t) })
+                    .OrderBy(t => t.Number)
+                    .ToList();
+
+                return new ResponseTechnologicalObjects
+                {
+                    Message = $"{items.Count} technology object(s) in '{softwarePath}'",
+                    Items = items,
+                    Meta = Ok(new JsonObject { ["count"] = items.Count })
+                };
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
+            }
+            catch (Exception ex) when (ex is not McpException)
+            {
+                throw new McpException($"Unexpected error listing the technology objects of '{softwarePath}': {ex.Message}", ex);
+            }
+        }
 
         private static ResponseBatchRename BatchRenamed(BatchRenameResult result, bool dryRun, string kind)
         {

@@ -29,6 +29,18 @@
 - Export -> edit -> import tools state in their message when objects could not be exported and were
   therefore not checked for references.
 
+### Fixed (ANet fork, 0.2.0.5)
+
+- __`RenameMembers` did not show its effect on the safety program__: it only looked at the blocks it
+  imports. A changed interface also turns every block inconsistent that reads a data block built from
+  the owner, even through a member that was not renamed - a fail-safe block among them means the
+  safety program must be compiled again. Such blocks are now listed (`Dependents`,
+  `FailsafeDependents`), warned about in the message, and the real run needs `allowFailsafe`.
+
+### Added (ANet fork, 0.2.0.5)
+
+- __`GetTechnologicalObjects`__: name, data block number and attributes of the technology objects.
+
 ### Changed (ANet fork, 0.2.0.4)
 
 - __`CompileBlock`__ reads `IsConsistent` of the compiled blocks afterwards and names those that are

@@ -1,6 +1,6 @@
 # ANet fork (TIAC_Writer)
 
-Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.0.4`.
+Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.0.5`.
 Local only - nothing is pushed.
 
 The fork adds what renaming objects in a real project needed and upstream did not have. All
@@ -8,7 +8,7 @@ additions live in files of their own (`*.AnetFork.cs`, `SimaticMl.cs`, `PathMatc
 `BatchRename.cs`, `Test9SimaticMl.cs`) so a merge from upstream stays trivial; the few edits to upstream files are
 listed at the end.
 
-## New tools (all but `CompileBlock` need `--allow-write`)
+## New tools (all but `CompileBlock` and `GetTechnologicalObjects` need `--allow-write`)
 
 | Tool                        | How                    | Notes                                                                     |
 | --------------------------- | ---------------------- | ------------------------------------------------------------------------- |
@@ -25,6 +25,7 @@ listed at the end.
 | `SetTagComment`             | setter                 | comment of one tag                                                        |
 | `ReplaceTagComments`        | setter, batch          | `find=replace` pairs in one pass over a table or all tables; `dryRun`     |
 | `RenameWatchTableGroup`     | setter `Name`          | sibling group of the new name is rejected                                 |
+| `GetTechnologicalObjects`   | read                   | name, DB number and attributes of every technology object                 |
 | `CompileBlock`              | `ICompilable`          | one block or one block group; refuses fail-safe blocks; names what is still inconsistent afterwards |
 
 `RenameTagTable`, `UpdateTag`, `RenameWatchTable` and every tool that takes a tag table, tag or watch
@@ -67,6 +68,14 @@ temp directory, edit the XML (`Siemens/SimaticMl.cs`) and import it back with `O
   arrays and PLC tags of a PLC data type). What mentions an old name but cannot be resolved is
   returned under `Warnings`, never guessed.
 - Several renames in one call are applied together, so a swap (`A=B; B=A`) works.
+- A changed interface makes more blocks inconsistent than the ones that are edited: every data block
+  built from the owner (instance DBs, DBs and types with a member of its type) and every block that
+  reads one of those or calls the owner - also when it reads a member that was not renamed.
+  `RenameMembers` lists them as `Dependents`; fail-safe blocks among them (`FailsafeDependents`,
+  which also holds fail-safe blocks that could not be exported) make the real run need
+  `allowFailsafe=true`, because the safety program then has to be compiled again. Found live with
+  0.2.0.2, which reported nothing while an F-FB reading another member of the instance DB turned
+  inconsistent.
 - Not updated by `RenameMembers`: HMI tags, watch and force tables, technology object parameters,
   traces. Start values kept in other DBs for a renamed member, and its current values in the PLC,
   may be reset - back them up first.
@@ -114,4 +123,4 @@ there. A Release build would overwrite, or fail on, the files of the running ser
 - `ModelContextProtocol/McpPrompts.cs`: class made `partial`.
 - `tests/TiaMcpServer.Test/Test7ToolRegistration.cs`: registers `Engineering.Resolver`, without
   which the `BuildTools` tests fail with "Siemens.Engineering.Step7 not found".
-- `TiaMcpServer.csproj`: `AssemblyVersion` 0.2.0.4, so `--doctor` tells the fork from the original.
+- `TiaMcpServer.csproj`: `AssemblyVersion` 0.2.0.5, so `--doctor` tells the fork from the original.

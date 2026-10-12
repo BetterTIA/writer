@@ -226,6 +226,18 @@ Use the RenameWatchTableGroup tool with these parameters:
 - newName: {newName}";
         }
 
+        [McpServerPrompt(Name = "GetTechnologicalObjects"), Description("List the technology objects of a PLC")]
+        public static string GetTechnologicalObjects(string softwarePath)
+        {
+            return $@"List the technology objects (PID_Temp, axes, ...) of the PLC software with name, data block number and attributes.
+
+Common parameter values:
+- softwarePath: defines the path in the project structure to the PLC software
+
+Use the GetTechnologicalObjects tool with these parameters:
+- softwarePath: {softwarePath}";
+        }
+
         [McpServerPrompt(Name = "CompileBlock"), Description("Compile one block or one block group")]
         public static string CompileBlock(string softwarePath, string path)
         {

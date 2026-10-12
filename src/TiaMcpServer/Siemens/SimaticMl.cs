@@ -29,6 +29,14 @@ namespace TiaMcpServer.Siemens
 
         /// <summary>Names of the documents that were edited and have to be imported back.</summary>
         public HashSet<string> Changed { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Names of the documents that are not edited but depend on the changed interface: data
+        /// blocks built from the owner, and every block that reads one of those or calls the
+        /// owner. TIA Portal marks them inconsistent after the import - also a block that reads
+        /// a member that was not renamed at all.
+        /// </summary>
+        public HashSet<string> Dependents { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -335,6 +343,28 @@ namespace TiaMcpServer.Siemens
                 }
             }
 
+            // Everything whose layout follows from the owner: instance DBs, DBs and types with a
+            // member of the owner's type, and so on until nothing new is found.
+            var changed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { owner };
+
+            for (var grew = true; grew;)
+            {
+                grew = false;
+
+                foreach (var pair in docs.Where(d => !changed.Contains(d.Key)))
+                {
+                    var members = Kid(Kid(Body(pair.Value), "AttributeList"), "Interface")?.Descendants()
+                        .Where(e => e.Name.LocalName == "Member") ?? Enumerable.Empty<XElement>();
+
+                    if (changed.Contains(Attribute(pair.Value, "InstanceOfName") ?? string.Empty)
+                        || members.Any(m => changed.Contains(TypeName((string?)m.Attribute("Datatype")) ?? string.Empty)))
+                    {
+                        changed.Add(pair.Key);
+                        grew = true;
+                    }
+                }
+            }
+
             var oldNames = new HashSet<string>(targets.Keys.Select(NameOf), StringComparer.OrdinalIgnoreCase);
             var parameters = targets
                 .Where(t => t.Key.Parent?.Name.LocalName == "Section")
@@ -361,6 +391,11 @@ namespace TiaMcpServer.Siemens
                 var name = pair.Key;
                 var doc = pair.Value;
 
+                if (changed.Contains(name) || doc.Descendants().Any(e => e.Name.LocalName == "CallInfo" && changed.Contains(NameOf(e))))
+                {
+                    result.Dependents.Add(name);
+                }
+
                 // Operands of LAD, FBD, STL and SCL, and the instance of a call.
                 foreach (var symbol in doc.Descendants().Where(e => e.Name.LocalName == "Symbol" || e.Name.LocalName == "Instance"))
                 {
@@ -376,6 +411,11 @@ namespace TiaMcpServer.Siemens
                     var local = scope == "LocalVariable";
                     var (declarations, unresolved) = resolver.Resolve(names, local, doc);
                     var renamed = names.ToList();
+
+                    if (resolver.Touches(names, local, declarations, changed))
+                    {
+                        result.Dependents.Add(name);
+                    }
 
                     for (var i = 0; i < names.Count; i++)
                     {
@@ -410,6 +450,11 @@ namespace TiaMcpServer.Siemens
                         var names = segments.Select(s => s.Groups[1].Value.Trim('"')).ToList();
                         var (declarations, unresolved) = resolver.Resolve(names, local, doc);
                         var rebuilt = local ? "#" : string.Empty;
+
+                        if (resolver.Touches(names, local, declarations, changed))
+                        {
+                            result.Dependents.Add(name);
+                        }
 
                         for (var i = 0; i < segments.Count; i++)
                         {
@@ -520,6 +565,8 @@ namespace TiaMcpServer.Siemens
                 edit();
             }
 
+            result.Dependents.ExceptWith(result.Changed);
+
             return result;
         }
 
@@ -610,6 +657,24 @@ namespace TiaMcpServer.Siemens
                 }
 
                 return (declarations, names.Count);
+            }
+
+            /// <summary>
+            /// True when an access reaches into something whose layout follows from the owner:
+            /// its root is one of the <paramref name="changed"/> blocks or a tag of such a type,
+            /// or one of its components is declared in, or typed as, one of them.
+            /// </summary>
+            public bool Touches(IList<string> names, bool local, XElement?[] declarations, HashSet<string> changed)
+            {
+                if (!local && (changed.Contains(names[0])
+                               || (_tagTypes.TryGetValue(names[0], out var tagType) && changed.Contains(TypeName(tagType) ?? tagType.Trim()))))
+                {
+                    return true;
+                }
+
+                return declarations.Any(d => d != null
+                    && (changed.Contains(d.Document == null ? string.Empty : ObjectName(d.Document))
+                        || changed.Contains(TypeName((string?)d.Attribute("Datatype")) ?? string.Empty)));
             }
 
             private IEnumerable<XElement>? TypeMembers(string? datatype)

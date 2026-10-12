@@ -42,6 +42,16 @@ namespace TiaMcpServer.Siemens
 
         /// <summary>Objects TIA Portal would not export, so references inside them were not seen.</summary>
         public List<string> NotScanned { get; set; } = new List<string>();
+
+        /// <summary>Objects that are not edited but read the changed interface, so they turn inconsistent.</summary>
+        public List<string> Dependents { get; set; } = new List<string>();
+
+        /// <summary>
+        /// The fail-safe blocks among <see cref="Dependents"/>, plus fail-safe blocks that could
+        /// not be exported and whose dependence is therefore unknown. They are not imported, but
+        /// the safety program has to be compiled again because of them.
+        /// </summary>
+        public List<string> FailsafeDependents { get; set; } = new List<string>();
     }
 
     /// <summary>One object of a batch rename, with what the rename would touch in the safety program.</summary>
@@ -170,15 +180,20 @@ namespace TiaMcpServer.Siemens
                 ("softwarePath", softwarePath), ("groupPath", groupPath), ("newName", newName));
         }
 
-        private List<TechnologicalInstanceDB> GetTechnologicalObjects(string softwarePath)
+        public List<TechnologicalInstanceDB> GetTechnologicalObjects(string softwarePath)
         {
-            var objects = new List<TechnologicalInstanceDB>();
+            return Operation.Run(_logger, nameof(GetTechnologicalObjects), PortalErrorCode.NotFound,
+                () =>
+                {
+                    var objects = new List<TechnologicalInstanceDB>();
 
-            WalkRecursive<TechnologicalInstanceDBGroup, TechnologicalInstanceDB>(
-                GetPlcSoftwareOrThrow(softwarePath).TechnologicalObjectGroup,
-                objects, g => g.TechnologicalObjects, g => g.Groups, t => t.Name);
+                    WalkRecursive<TechnologicalInstanceDBGroup, TechnologicalInstanceDB>(
+                        GetPlcSoftwareOrThrow(softwarePath).TechnologicalObjectGroup,
+                        objects, g => g.TechnologicalObjects, g => g.Groups, t => t.Name);
 
-            return objects;
+                    return objects;
+                },
+                ("softwarePath", softwarePath));
         }
 
         public bool RenameWatchTableGroup(string softwarePath, string groupPath, string newName)
@@ -300,16 +315,23 @@ namespace TiaMcpServer.Siemens
                 }
             }
 
+            if (result.FailsafeDependents.Count > 0)
+            {
+                result.Warnings.Add(
+                    "Fail-safe block(s) depend on the changed interface: " + string.Join(", ", result.FailsafeDependents) +
+                    ". They are not edited, but they turn inconsistent, so the safety program has to be compiled and accepted again by the operator.");
+            }
+
             if (dryRun || edited.Count == 0)
             {
                 return result;
             }
 
-            if (!allowFailsafe && edited.Any(e => e.Info.Failsafe))
+            if (!allowFailsafe && (edited.Any(e => e.Info.Failsafe) || result.FailsafeDependents.Count > 0))
             {
                 throw new PortalException(PortalErrorCode.InvalidState,
-                    "This would modify fail-safe block(s): " +
-                    string.Join(", ", edited.Where(e => e.Info.Failsafe).Select(e => e.Info.Path)) +
+                    "This would change the safety program through fail-safe block(s): " +
+                    string.Join(", ", edited.Where(e => e.Info.Failsafe).Select(e => e.Info.Path).Concat(result.FailsafeDependents)) +
                     ". Review the dry run with the operator and repeat with allowFailsafe=true if that is intended.");
             }
 
@@ -430,6 +452,11 @@ namespace TiaMcpServer.Siemens
                             {
                                 exported.Add(ExportForEdit(block, directory, exported.Count));
                             }
+                            else if (IsFailsafe(block))
+                            {
+                                // Not knowing must not read as "the safety program is not affected".
+                                result.FailsafeDependents.Add($"{GetBlockPath(block)} (not exported, dependence unknown)");
+                            }
                         }
 
                         var docs = new Dictionary<string, XDocument>(StringComparer.OrdinalIgnoreCase);
@@ -449,6 +476,17 @@ namespace TiaMcpServer.Siemens
 
                         result.Changes = renamed.Changes;
                         result.Warnings.AddRange(renamed.Warnings);
+
+                        var dependents = exported.Where(e => renamed.Dependents.Contains(e.Name)).ToList();
+
+                        result.Dependents = dependents.Select(e => e.Info.Path).ToList();
+                        result.FailsafeDependents.InsertRange(0, dependents.Where(e => e.Info.Failsafe).Select(e => e.Info.Path));
+
+                        if (dependents.Count > 0)
+                        {
+                            result.Warnings.Add(
+                                $"{dependents.Count} further object(s) read the changed interface and will be inconsistent until compiled (see Dependents).");
+                        }
 
                         // The declaration has to exist before anything that refers to it is imported.
                         var edited = exported

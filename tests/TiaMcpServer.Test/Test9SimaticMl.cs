@@ -273,6 +273,27 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
+        public void RenameMembers_Dependents_AreTheBlocksThatReadTheChangedInterfaceEvenAnotherMember()
+        {
+            // The live case: an F-FB reads a member of the instance DB that is not renamed at all.
+            var conveyor = Doc("SW.Blocks.FB", "FB_Conveyor", Section("Input", Member("Enable", "Bool")) + Section("Output", Member("Running", "Bool")));
+            var instance = Doc("SW.Blocks.InstanceDB", "DB_Conv1", Section("Output", Member("Running", "Bool")),
+                attributes: "<InstanceOfName>FB_Conveyor</InstanceOfName>");
+            var safety = Doc("SW.Blocks.FB", "F_Guard", "", Network(Lad(Access("GlobalVariable", "DB_Conv1", "Running"))));
+            var holder = Doc("SW.Blocks.GlobalDB", "DB_Holder", Section("Static", Member("Conv", "\"FB_Conveyor\"") + Member("Flag", "Bool")));
+            var viaHolder = Doc("SW.Blocks.FC", "FC_ReadsHolder", "", Network(Lad(Access("GlobalVariable", "DB_Holder", "Flag"))));
+            var caller = Doc("SW.Blocks.OB", "Main", "", Network(Lad("<Call UId=\"30\"><CallInfo Name=\"FB_Conveyor\" BlockType=\"FB\" /></Call>")));
+            var unrelated = Doc("SW.Blocks.FC", "FC_Unrelated", Section("Input", Member("Enable", "Bool")), Network(Lad(Access("LocalVariable", "Enable"))));
+
+            var result = SimaticMl.RenameMembers(
+                Docs(conveyor, instance, safety, holder, viaHolder, caller, unrelated), NoTags, "FB_Conveyor", Renames("Enable=Release"));
+
+            CollectionAssert.AreEquivalent(new[] { "FB_Conveyor" }, result.Changed.ToList());
+            CollectionAssert.AreEquivalent(
+                new[] { "DB_Conv1", "F_Guard", "DB_Holder", "FC_ReadsHolder", "Main" }, result.Dependents.ToList());
+        }
+
+        [TestMethod]
         public void RenameMembers_WhatCannotBeResolved_IsReportedNotGuessed()
         {
             var db = Doc("SW.Blocks.GlobalDB", "DB_Line", Section("Static", Member("Speed", "Real")));
