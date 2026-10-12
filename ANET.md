@@ -1,6 +1,6 @@
 # ANet fork (TIAC_Writer)
 
-Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.0.5`.
+Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.0.6`.
 Local only - nothing is pushed.
 
 The fork adds what renaming objects in a real project needed and upstream did not have. All
@@ -33,6 +33,19 @@ table path now also find tables whose name contains `/` (upstream split the path
 
 `GetProject` no longer fails on projects whose attributes hold Openness objects: attribute values
 that the JSON serializer cannot write are reported as text (`Helper.GetAttributeList`).
+
+## Smaller responses
+
+`RenameTags`, `RenameObjects` and `RenameMembers` take `summaryOnly=true`: the response then holds the
+counts, warnings, dependents and only the items that touch the safety program (for `RenameMembers` a
+change count per object and network), and the complete result is written as JSON to
+`%TEMP%\tiamcp-report-<tool>-<timestamp>.json`, whose path is returned as `ReportPath`.
+
+## Fail-safe blocks
+
+A block counts as fail-safe when its programming language is one of the `F_...` languages or when
+a safety runtime group names it (F-OB, main safety block, its instance DB, the information DB).
+The second rule exists because a know-how protected F-OB was not recognised by its language.
 
 ## Batch renames
 
@@ -123,4 +136,4 @@ there. A Release build would overwrite, or fail on, the files of the running ser
 - `ModelContextProtocol/McpPrompts.cs`: class made `partial`.
 - `tests/TiaMcpServer.Test/Test7ToolRegistration.cs`: registers `Engineering.Resolver`, without
   which the `BuildTools` tests fail with "Siemens.Engineering.Step7 not found".
-- `TiaMcpServer.csproj`: `AssemblyVersion` 0.2.0.5, so `--doctor` tells the fork from the original.
+- `TiaMcpServer.csproj`: `AssemblyVersion` 0.2.0.6, so `--doctor` tells the fork from the original.

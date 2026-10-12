@@ -29,6 +29,19 @@
 - Export -> edit -> import tools state in their message when objects could not be exported and were
   therefore not checked for references.
 
+### Added (ANet fork, 0.2.0.6)
+
+- __`summaryOnly`__ on `RenameTags`, `RenameObjects` and `RenameMembers`: a short response, the complete
+  result as a JSON file in the temp directory (`ReportPath`).
+- __`GetTechnologicalObjects`__ returns name, number, type and version; all attributes only with
+  `attributes=true`.
+
+### Fixed (ANet fork, 0.2.0.6)
+
+- A know-how protected F-OB was not recognised as fail-safe (its language is not an `F_...` one), so it
+  was missing from `FailsafeDependents`. Blocks named by the safety runtime groups now count as
+  fail-safe too.
+
 ### Fixed (ANet fork, 0.2.0.5)
 
 - __`RenameMembers` did not show its effect on the safety program__: it only looked at the blocks it

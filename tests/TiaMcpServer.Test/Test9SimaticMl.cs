@@ -347,6 +347,33 @@ namespace TiaMcpServer.Test
 
         #endregion
 
+        #region reports
+
+        [TestMethod]
+        public void WriteReport_WritesTheWholeResultAsReadableJson()
+        {
+            var result = new BatchRenameResult();
+            result.Items.Add(new BatchRenameItem { Kind = "tag", OldName = "iPump1_Run", NewName = "iPump2_Run", UsedByFailsafe = { "F_Guard" } });
+            result.Warnings.Add("S" + (char)0x00E1 + "t " + (char)0x010D + ". 1");
+
+            var path = McpServer.WriteReport("Test", result);
+
+            try
+            {
+                var text = System.IO.File.ReadAllText(path);
+
+                StringAssert.Contains(text, "\"OldName\": \"iPump1_Run\"");
+                StringAssert.Contains(text, "F_Guard");
+                StringAssert.Contains(text, result.Warnings[0], "Non-ASCII text must stay readable, not escaped");
+            }
+            finally
+            {
+                System.IO.File.Delete(path);
+            }
+        }
+
+        #endregion
+
         #region batch rename order
 
         /// <summary>Carries a plan out on a name list the way the setters would, failing on a clash.</summary>

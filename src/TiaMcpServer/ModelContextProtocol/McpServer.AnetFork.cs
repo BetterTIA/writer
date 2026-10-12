@@ -4,7 +4,11 @@ using Siemens.Engineering.Compiler;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
+using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using TiaMcpServer.Siemens;
 
@@ -36,6 +40,12 @@ namespace TiaMcpServer.ModelContextProtocol
 
         /// <summary>Fail-safe blocks among the dependents: the safety program has to be compiled again.</summary>
         public IEnumerable<string>? FailsafeDependents { get; set; }
+
+        /// <summary>With summaryOnly: one line per object with its change count per network, instead of Changes.</summary>
+        public IEnumerable<string>? ChangeSummary { get; set; }
+
+        /// <summary>With summaryOnly: the file on the server machine that holds the complete result as JSON.</summary>
+        public string? ReportPath { get; set; }
     }
 
     /// <summary>One technology object, as GetTechnologicalObjects lists it.</summary>
@@ -46,7 +56,13 @@ namespace TiaMcpServer.ModelContextProtocol
         /// <summary>Number of the data block behind the technology object.</summary>
         public int? Number { get; set; }
 
-        /// <summary>Every attribute Openness reports for it, the object type and version among them.</summary>
+        /// <summary>Object type, e.g. PID_Temp (attribute OfSystemLibElement).</summary>
+        public string? Type { get; set; }
+
+        /// <summary>Version of the object type (attribute OfSystemLibVersion).</summary>
+        public string? Version { get; set; }
+
+        /// <summary>Every attribute Openness reports for it; only with attributes=true.</summary>
         public IEnumerable<Attribute>? Attributes { get; set; }
     }
 
@@ -62,9 +78,16 @@ namespace TiaMcpServer.ModelContextProtocol
 
         public bool Applied { get; set; }
 
+        /// <summary>Number of objects in the batch; Items may hold fewer with summaryOnly.</summary>
+        public int ItemCount { get; set; }
+
+        /// <summary>All objects of the batch, or with summaryOnly only those that touch the safety program.</summary>
         public IEnumerable<BatchRenameItem>? Items { get; set; }
 
         public IEnumerable<string>? Warnings { get; set; }
+
+        /// <summary>With summaryOnly: the file on the server machine that holds the complete result as JSON.</summary>
+        public string? ReportPath { get; set; }
     }
 
     public static partial class McpServer
@@ -146,7 +169,29 @@ namespace TiaMcpServer.ModelContextProtocol
         /// <summary>Changes listed in a response; a rename across a large PLC can produce thousands.</summary>
         private const int MaxReportedChanges = 200;
 
-        private static ResponseXmlEdit XmlEdited(XmlEditResult result, bool dryRun)
+        /// <summary>
+        /// Writes the complete result of a tool call into the temp directory, for the calls that
+        /// return a summary only: a large batch is tens of kilobytes the caller rarely reads.
+        /// </summary>
+        public static string WriteReport(string toolName, object result)
+        {
+            try
+            {
+                var path = Path.Combine(Path.GetTempPath(), $"tiamcp-report-{toolName}-{DateTime.Now:yyyyMMdd-HHmmss-fff}.json");
+                var options = new JsonSerializerOptions { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
+                File.WriteAllText(path, JsonSerializer.Serialize(result, options), Encoding.UTF8);
+
+                return path;
+            }
+            catch (Exception ex)
+            {
+                // The report is a convenience: failing here would roll back a rename that worked.
+                return $"<report not written: {ex.Message}>";
+            }
+        }
+
+        private static ResponseXmlEdit XmlEdited(XmlEditResult result, bool dryRun, bool summaryOnly = false, string toolName = "")
         {
             var summary = $"{result.Changes.Count} change(s) in {result.Objects.Count} object(s)";
 
@@ -167,7 +212,12 @@ namespace TiaMcpServer.ModelContextProtocol
                 Applied = result.Applied,
                 ChangeCount = result.Changes.Count,
                 Objects = result.Objects,
-                Changes = result.Changes.Take(MaxReportedChanges),
+                Changes = summaryOnly ? null : result.Changes.Take(MaxReportedChanges),
+                ChangeSummary = summaryOnly
+                    ? result.Changes.GroupBy(c => c.Object).Select(o => $"{o.Key}: {o.Count()} change(s) - " +
+                        string.Join(", ", o.GroupBy(c => c.Where).Select(w => w.Count() == 1 ? w.Key : $"{w.Key} x{w.Count()}"))).ToList()
+                    : null,
+                ReportPath = summaryOnly ? WriteReport(toolName, result) : null,
                 Warnings = result.Warnings,
                 NotScanned = result.NotScanned,
                 Dependents = result.Dependents,
@@ -239,7 +289,8 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("kind: 'block' when ownerPath is a block (FB, FC, OB, DB), 'type' when it is a PLC data type")] string kind,
             [Description("renames: 'memberPath=newName' pairs separated by ';', e.g. 'Speed=Velocity; Config.Limit=MaxLimit'. The path is relative to the owner, nested struct members separated by '.'")] string renames,
             [Description("dryRun: true (default) only reports what would change; false imports the edited objects")] bool dryRun = true,
-            [Description("allowFailsafe: true allows importing fail-safe blocks, which changes their F-signature")] bool allowFailsafe = false)
+            [Description("allowFailsafe: true allows importing fail-safe blocks, which changes their F-signature")] bool allowFailsafe = false,
+            [Description("summaryOnly: true returns change counts per object and network instead of every change, and writes the complete result to a JSON file whose path is returned")] bool summaryOnly = false)
         {
             return Guarded(nameof(RenameMembers), () =>
             {
@@ -252,7 +303,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
                 return XmlEdited(
                     Portal.RenameMembers(softwarePath, ownerPath, isType, ParseRenames(renames), dryRun, allowFailsafe),
-                    dryRun);
+                    dryRun, summaryOnly, nameof(RenameMembers));
             });
         }
 
@@ -283,14 +334,30 @@ namespace TiaMcpServer.ModelContextProtocol
         #region batch rename, tag comments, compile
 
         [McpServerTool(Name = "GetTechnologicalObjects", Title = "Get technology objects", ReadOnly = true, OpenWorld = false, UseStructuredContent = true),
-         Description("List the technology objects (PID_Temp, axes, ...) of the PLC software with name, data block number and attributes - enough to check which name belongs to which number after a rename")]
+         Description("List the technology objects (PID_Temp, axes, ...) of the PLC software with name, data block number, type and version - enough to check which name belongs to which number after a rename")]
         public static ResponseTechnologicalObjects GetTechnologicalObjects(
-            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath)
+            [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
+            [Description("attributes: true adds every attribute Openness reports for each object (about thirty); default false")] bool attributes = false)
         {
             try
             {
                 var items = Portal.GetTechnologicalObjects(softwarePath)
-                    .Select(t => new TechnologicalObjectInfo { Name = t.Name, Number = t.Number, Attributes = Helper.GetAttributeList(t) })
+                    .Select(t =>
+                    {
+                        var all = Helper.GetAttributeList(t);
+
+                        string? Read(string name) =>
+                            all.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase))?.Value?.ToString();
+
+                        return new TechnologicalObjectInfo
+                        {
+                            Name = t.Name,
+                            Number = t.Number,
+                            Type = Read("OfSystemLibElement"),
+                            Version = Read("OfSystemLibVersion"),
+                            Attributes = attributes ? all : null
+                        };
+                    })
                     .OrderBy(t => t.Number)
                     .ToList();
 
@@ -311,13 +378,15 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        private static ResponseBatchRename BatchRenamed(BatchRenameResult result, bool dryRun, string kind)
+        private static ResponseBatchRename BatchRenamed(BatchRenameResult result, bool dryRun, string kind, bool summaryOnly, string toolName)
         {
             return new ResponseBatchRename
             {
                 DryRun = dryRun,
                 Applied = result.Applied,
-                Items = result.Items,
+                ItemCount = result.Items.Count,
+                Items = summaryOnly ? result.Items.Where(i => i.Failsafe || i.UsedByFailsafe.Count > 0).ToList() : result.Items,
+                ReportPath = summaryOnly ? WriteReport(toolName, result) : null,
                 Warnings = result.Warnings,
                 Message = result.Applied
                     ? $"{result.Items.Count} {kind} renamed. Blocks that refer to them are inconsistent until compiled. {SaveHint}"
@@ -333,10 +402,11 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("renames: 'currentName=newName' pairs separated by ';', e.g. 'iPump1_Run=iPump2_Run; iPump2_Run=iPump1_Run'")] string renames,
             [Description("dryRun: true (default) only reports what would change; false renames the tags")] bool dryRun = true,
-            [Description("allowFailsafe: true allows renaming tags that fail-safe blocks use, which changes the safety program")] bool allowFailsafe = false)
+            [Description("allowFailsafe: true allows renaming tags that fail-safe blocks use, which changes the safety program")] bool allowFailsafe = false,
+            [Description("summaryOnly: true returns only the tags that touch the safety program plus counts and warnings, and writes the complete result to a JSON file whose path is returned")] bool summaryOnly = false)
         {
             return Guarded(nameof(RenameTags), () =>
-                BatchRenamed(Portal.RenameTags(softwarePath, ParseRenames(renames), dryRun, allowFailsafe), dryRun, "tag(s)"));
+                BatchRenamed(Portal.RenameTags(softwarePath, ParseRenames(renames), dryRun, allowFailsafe), dryRun, "tag(s)", summaryOnly, nameof(RenameTags)));
         }
 
         [WriteTool]
@@ -346,10 +416,11 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("renames: 'currentName=newName' pairs separated by ';', e.g. 'PID_1=PID_2; PID_2=PID_1'")] string renames,
             [Description("dryRun: true (default) only reports what would change; false renames the objects")] bool dryRun = true,
-            [Description("allowFailsafe: true allows renaming fail-safe blocks and objects they use, which changes the safety program")] bool allowFailsafe = false)
+            [Description("allowFailsafe: true allows renaming fail-safe blocks and objects they use, which changes the safety program")] bool allowFailsafe = false,
+            [Description("summaryOnly: true returns only the objects that touch the safety program plus counts and warnings, and writes the complete result to a JSON file whose path is returned")] bool summaryOnly = false)
         {
             return Guarded(nameof(RenameObjects), () =>
-                BatchRenamed(Portal.RenameObjects(softwarePath, ParseRenames(renames), dryRun, allowFailsafe), dryRun, "object(s)"));
+                BatchRenamed(Portal.RenameObjects(softwarePath, ParseRenames(renames), dryRun, allowFailsafe), dryRun, "object(s)", summaryOnly, nameof(RenameObjects)));
         }
 
         private static ResponseXmlEdit CommentsEdited(List<XmlChange> changes, bool dryRun)

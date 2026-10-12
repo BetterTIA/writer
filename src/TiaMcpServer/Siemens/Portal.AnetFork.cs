@@ -1,6 +1,9 @@
+using Microsoft.Extensions.Logging;
 using Siemens.Engineering;
 using Siemens.Engineering.Compiler;
 using Siemens.Engineering.CrossReference;
+using Siemens.Engineering.HW;
+using Siemens.Engineering.Safety;
 using Siemens.Engineering.SW.Blocks;
 using Siemens.Engineering.SW.Tags;
 using Siemens.Engineering.SW.TechnologicalObjects;
@@ -258,9 +261,52 @@ namespace TiaMcpServer.Siemens
             public Action Import = () => { };
         }
 
+        /// <summary>
+        /// Blocks the safety runtime groups name: the F-OB, the main safety block, its instance
+        /// DB and the F-runtime-group information DB. Refreshed by LoadSafetyBlocks at the start
+        /// of every operation that asks IsFailsafe.
+        /// </summary>
+        private HashSet<string> _safetyBlocks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// The programming language alone does not mark every block of the safety program: seen
+        /// live, a know-how protected F-OB was not recognised by it. The runtime groups of the
+        /// safety administration name those blocks explicitly.
+        /// </summary>
+        private void LoadSafetyBlocks(string softwarePath)
+        {
+            _safetyBlocks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            try
+            {
+                var administration = (GetSoftwareContainer(softwarePath)?.Parent as DeviceItem)?.GetService<SafetyAdministration>();
+
+                if (administration == null)
+                {
+                    return;
+                }
+
+                foreach (var group in administration.RuntimeGroups)
+                {
+                    foreach (var name in new[] { group.FOBName, group.MainSafetyBlockName, group.MainSafetyBlockIDbName, group.InfoDbName })
+                    {
+                        if (!string.IsNullOrEmpty(name))
+                        {
+                            _safetyBlocks.Add(name);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // A PLC without a safety program, or one that refuses the service: the language check still applies.
+                _logger?.LogDebug(ex, "Safety runtime groups could not be read for {SoftwarePath}", softwarePath);
+            }
+        }
+
         // F_LAD, F_FBD, F_DB, F_CALL, ...: every fail-safe language of the enum carries this prefix.
-        private static bool IsFailsafe(PlcBlock block) =>
-            block.ProgrammingLanguage.ToString().StartsWith("F_", StringComparison.Ordinal);
+        private bool IsFailsafe(PlcBlock block) =>
+            block.ProgrammingLanguage.ToString().StartsWith("F_", StringComparison.Ordinal) || _safetyBlocks.Contains(block.Name);
 
         private Exported ExportForEdit(PlcBlock block, string directory, int index)
         {
@@ -300,7 +346,7 @@ namespace TiaMcpServer.Siemens
         /// Fills in the result for the edited objects and, unless this is a dry run, imports them
         /// in the given order.
         /// </summary>
-        private static XmlEditResult Finish(XmlEditResult result, List<Exported> edited, bool dryRun, bool allowFailsafe)
+        private XmlEditResult Finish(XmlEditResult result, List<Exported> edited, bool dryRun, bool allowFailsafe)
         {
             foreach (var item in edited)
             {
@@ -357,6 +403,8 @@ namespace TiaMcpServer.Siemens
             return Operation.Run(_logger, nameof(EditNetworkTexts), PortalErrorCode.ImportFailed,
                 () =>
                 {
+                    LoadSafetyBlocks(softwarePath);
+
                     var block = GetBlock(softwarePath, blockPath)
                         ?? throw new PortalException(PortalErrorCode.NotFound,
                             $"Block not found at '{blockPath}'. Use 'GetBlocks' to list the available blocks.");
@@ -403,6 +451,8 @@ namespace TiaMcpServer.Siemens
                     {
                         throw new PortalException(PortalErrorCode.InvalidParams, "No rename was given.");
                     }
+
+                    LoadSafetyBlocks(softwarePath);
 
                     foreach (var newName in renames.Values)
                     {
@@ -564,6 +614,8 @@ namespace TiaMcpServer.Siemens
         {
             var steps = BatchRename.Plan(
                 items.Select(i => i.Info.OldName).ToList(), items.Select(i => i.Info.NewName).ToList(), allNames);
+
+            LoadSafetyBlocks(softwarePath);
             var failsafeBlocks = new HashSet<string>(GetBlocks(softwarePath).Where(IsFailsafe).Select(b => b.Name), StringComparer.OrdinalIgnoreCase);
             var result = new BatchRenameResult { Items = items.Select(i => i.Info).ToList() };
 
@@ -684,6 +736,8 @@ namespace TiaMcpServer.Siemens
             return Operation.Run(_logger, nameof(RenameObjects), PortalErrorCode.RenameFailed,
                 () =>
                 {
+                    LoadSafetyBlocks(softwarePath);
+
                     var blocks = GetBlocks(softwarePath);
                     var objects = GetTechnologicalObjects(softwarePath);
                     var types = GetTypes(softwarePath);
@@ -837,6 +891,8 @@ namespace TiaMcpServer.Siemens
                 {
                     IEngineeringServiceProvider target;
                     var covered = new List<PlcBlock>();
+
+                    LoadSafetyBlocks(softwarePath);
 
                     if (GetBlock(softwarePath, path) is PlcBlock block)
                     {
