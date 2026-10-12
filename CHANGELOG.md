@@ -29,6 +29,16 @@
 - Export -> edit -> import tools state in their message when objects could not be exported and were
   therefore not checked for references.
 
+### Changed (ANet fork, 0.2.0.7)
+
+- __Network text tools list their dependents__: an import can leave the instance DB and the callers of
+  the block inconsistent even for a comment-only change. `SetNetworkText` / `ReplaceNetworkText` now
+  return them (`Dependents`, `FailsafeDependents`) from the cross references and need `allowFailsafe`
+  when a fail-safe block is among them.
+- __`InconsistentAfter`__ on every export -> edit -> import tool: the blocks that became inconsistent
+  through the real run.
+- __`CompileBlock`__ also names the other inconsistent blocks of the PLC.
+
 ### Added (ANet fork, 0.2.0.6)
 
 - __`summaryOnly`__ on `RenameTags`, `RenameObjects` and `RenameMembers`: a short response, the complete

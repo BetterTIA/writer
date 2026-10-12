@@ -41,6 +41,9 @@ namespace TiaMcpServer.ModelContextProtocol
         /// <summary>Fail-safe blocks among the dependents: the safety program has to be compiled again.</summary>
         public IEnumerable<string>? FailsafeDependents { get; set; }
 
+        /// <summary>After a real run: blocks that are inconsistent now and were not before the import.</summary>
+        public IEnumerable<string>? InconsistentAfter { get; set; }
+
         /// <summary>With summaryOnly: one line per object with its change count per network, instead of Changes.</summary>
         public IEnumerable<string>? ChangeSummary { get; set; }
 
@@ -199,8 +202,11 @@ namespace TiaMcpServer.ModelContextProtocol
             // so this must not hide in a list at the end of the response.
             var safety = result.FailsafeDependents.Count == 0
                 ? string.Empty
-                : $" WARNING: {result.FailsafeDependents.Count} fail-safe block(s) depend on the changed interface (see FailsafeDependents) - " +
-                  "the safety program will have to be compiled again; show this to the operator before applying.";
+                : $" WARNING: {result.FailsafeDependents.Count} fail-safe block(s) depend on what is imported (see FailsafeDependents) - " +
+                  "the safety program may have to be compiled again; show this to the operator before applying.";
+            var after = result.InconsistentAfter.Count == 0
+                ? string.Empty
+                : $" {result.InconsistentAfter.Count} block(s) are inconsistent now (see InconsistentAfter).";
             var blind = result.NotScanned.Count == 0
                 ? string.Empty
                 : $" WARNING: {result.NotScanned.Count} object(s) could not be exported and were NOT checked for references " +
@@ -222,10 +228,11 @@ namespace TiaMcpServer.ModelContextProtocol
                 NotScanned = result.NotScanned,
                 Dependents = result.Dependents,
                 FailsafeDependents = result.FailsafeDependents,
+                InconsistentAfter = result.InconsistentAfter,
                 Message = (result.Changes.Count == 0
                     ? "Nothing to change."
                     : result.Applied
-                        ? $"{summary} imported. Compile the software to verify. {SaveHint}"
+                        ? $"{summary} imported.{after} Compile the software to verify. {SaveHint}"
                         : $"Dry run: {summary} would be imported. Nothing was changed; repeat with dryRun=false to apply.") + safety + blind,
                 Meta = result.Applied ? OkMeta() : Ok()
             };
@@ -494,7 +501,7 @@ namespace TiaMcpServer.ModelContextProtocol
         {
             try
             {
-                var (result, inconsistent) = Portal.CompileBlocks(softwarePath, path);
+                var (result, inconsistent, others) = Portal.CompileBlocks(softwarePath, path);
                 var messages = FlattenCompilerMessages(result.Messages, 0).ToList();
                 var state = result.State.ToString();
 
@@ -514,7 +521,11 @@ namespace TiaMcpServer.ModelContextProtocol
                               (inconsistent.Count == 0
                                   ? string.Empty
                                   : $". WARNING: still inconsistent after the compile: {string.Join(", ", inconsistent)} - " +
-                                    "something they depend on needs compiling too; compile the whole software."),
+                                    "something they depend on needs compiling too; compile the whole software.") +
+                              (others.Count == 0
+                                  ? string.Empty
+                                  : $" Other inconsistent blocks in the PLC ({others.Count}): {string.Join(", ", others.Take(15))}" +
+                                    (others.Count > 15 ? ", ..." : string.Empty) + "."),
                     State = state,
                     ErrorCount = result.ErrorCount,
                     WarningCount = result.WarningCount,
@@ -524,7 +535,8 @@ namespace TiaMcpServer.ModelContextProtocol
                         ["state"] = state,
                         ["errorCount"] = result.ErrorCount,
                         ["warningCount"] = result.WarningCount,
-                        ["stillInconsistent"] = inconsistent.Count
+                        ["stillInconsistent"] = inconsistent.Count,
+                        ["otherInconsistent"] = others.Count
                     })
                 };
             }

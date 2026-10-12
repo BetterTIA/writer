@@ -55,6 +55,13 @@ namespace TiaMcpServer.Siemens
         /// the safety program has to be compiled again because of them.
         /// </summary>
         public List<string> FailsafeDependents { get; set; } = new List<string>();
+
+        /// <summary>
+        /// After a real run: the blocks that are inconsistent now and were not before - what TIA
+        /// Portal actually did, as opposed to the prediction in <see cref="Dependents"/>.
+        /// Fail-safe blocks carry the suffix " (fail-safe)".
+        /// </summary>
+        public List<string> InconsistentAfter { get; set; } = new List<string>();
     }
 
     /// <summary>One object of a batch rename, with what the rename would touch in the safety program.</summary>
@@ -346,7 +353,7 @@ namespace TiaMcpServer.Siemens
         /// Fills in the result for the edited objects and, unless this is a dry run, imports them
         /// in the given order.
         /// </summary>
-        private XmlEditResult Finish(XmlEditResult result, List<Exported> edited, bool dryRun, bool allowFailsafe)
+        private XmlEditResult Finish(string softwarePath, XmlEditResult result, List<Exported> edited, bool dryRun, bool allowFailsafe)
         {
             foreach (var item in edited)
             {
@@ -364,8 +371,8 @@ namespace TiaMcpServer.Siemens
             if (result.FailsafeDependents.Count > 0)
             {
                 result.Warnings.Add(
-                    "Fail-safe block(s) depend on the changed interface: " + string.Join(", ", result.FailsafeDependents) +
-                    ". They are not edited, but they turn inconsistent, so the safety program has to be compiled and accepted again by the operator.");
+                    "Fail-safe block(s) depend on what is imported: " + string.Join(", ", result.FailsafeDependents) +
+                    ". They are not edited, but they can turn inconsistent, and then the safety program has to be compiled and accepted again by the operator.");
             }
 
             if (dryRun || edited.Count == 0)
@@ -381,6 +388,8 @@ namespace TiaMcpServer.Siemens
                     ". Review the dry run with the operator and repeat with allowFailsafe=true if that is intended.");
             }
 
+            var before = new HashSet<string>(Inconsistent(softwarePath), StringComparer.OrdinalIgnoreCase);
+
             foreach (var item in edited)
             {
                 item.Doc.Save(item.File.FullName, SaveOptions.DisableFormatting);
@@ -388,8 +397,59 @@ namespace TiaMcpServer.Siemens
             }
 
             result.Applied = true;
+            result.InconsistentAfter = Inconsistent(softwarePath).Where(p => !before.Contains(p)).ToList();
 
             return result;
+        }
+
+        /// <summary>Paths of the blocks that are inconsistent right now, fail-safe ones marked.</summary>
+        private List<string> Inconsistent(string softwarePath) =>
+            GetBlocks(softwarePath).Where(b => !b.IsConsistent)
+                .Select(b => GetBlockPath(b) + (IsFailsafe(b) ? " (fail-safe)" : string.Empty)).ToList();
+
+        /// <summary>
+        /// What an import of <paramref name="block"/> can make inconsistent although its interface
+        /// stays the same: its instance DBs and whatever uses the block or one of those DBs. Seen
+        /// live after a comment-only import - the instance DB and the calling OB were inconsistent.
+        /// From the cross references, so it needs no export of other blocks.
+        /// </summary>
+        private void AddUsers(string softwarePath, PlcBlock block, XmlEditResult result)
+        {
+            var blocks = GetBlocks(softwarePath);
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            try
+            {
+                foreach (var source in new[] { block }.Concat(blocks.OfType<InstanceDB>().Where(d => block.Name.Equals(d.InstanceOfName, StringComparison.OrdinalIgnoreCase))))
+                {
+                    names.Add(source.Name);
+
+                    foreach (var references in source.GetService<CrossReferenceService>()?.GetCrossReferences(CrossReferenceFilter.AllObjects).Sources.ToList() ?? new List<SourceObject>())
+                    {
+                        CollectReferences(references, ignored, names);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Not knowing must not read as "the safety program is not affected".
+                result.Warnings.Add($"The users of '{block.Name}' could not be read from the cross references ({ex.Message}).");
+                result.FailsafeDependents.Add("unknown (cross references could not be read)");
+            }
+
+            names.Remove(block.Name);
+
+            var users = blocks.Where(b => names.Contains(b.Name)).ToList();
+
+            result.Dependents = users.Select(GetBlockPath).ToList();
+            result.FailsafeDependents.AddRange(users.Where(IsFailsafe).Select(GetBlockPath));
+
+            if (users.Count > 0)
+            {
+                result.Warnings.Add(
+                    $"{users.Count} object(s) use this block or its instance DB and may be inconsistent after the import (see Dependents); compile them afterwards.");
+            }
         }
 
         /// <summary>
@@ -419,7 +479,14 @@ namespace TiaMcpServer.Siemens
                         var exported = ExportForEdit(block, directory, 0);
                         var result = new XmlEditResult { Changes = edit(exported.Doc) };
 
-                        return Finish(result, result.Changes.Count > 0 ? new List<Exported> { exported } : new List<Exported>(), dryRun, allowFailsafe);
+                        if (result.Changes.Count == 0)
+                        {
+                            return result;
+                        }
+
+                        AddUsers(softwarePath, block, result);
+
+                        return Finish(softwarePath, result, new List<Exported> { exported }, dryRun, allowFailsafe);
                     }
                     finally
                     {
@@ -544,7 +611,7 @@ namespace TiaMcpServer.Siemens
                             .OrderBy(e => e.Name.Equals(ownerName, StringComparison.OrdinalIgnoreCase) ? 0 : e.Info.Kind == "type" ? 1 : 2)
                             .ToList();
 
-                        return Finish(result, edited, dryRun, allowFailsafe);
+                        return Finish(softwarePath, result, edited, dryRun, allowFailsafe);
                     }
                     finally
                     {
@@ -880,11 +947,12 @@ namespace TiaMcpServer.Siemens
         /// </summary>
         /// <param name="path">Root-relative path of a block or of a block group.</param>
         /// <returns>
-        /// The compiler result, and the blocks that are still inconsistent afterwards. The
-        /// compiler can report success and leave a block inconsistent - seen live on a caller of
-        /// renamed technology objects, which only a compile of the whole software cured.
+        /// The compiler result, the compiled blocks that are still inconsistent afterwards, and
+        /// every other inconsistent block of the PLC. The compiler can report success and leave a
+        /// block inconsistent - seen live on a caller of renamed technology objects - and the
+        /// instance DB and callers of a compiled block are not covered by its compile at all.
         /// </returns>
-        public (CompilerResult Result, List<string> Inconsistent) CompileBlocks(string softwarePath, string path)
+        public (CompilerResult Result, List<string> Inconsistent, List<string> OtherInconsistent) CompileBlocks(string softwarePath, string path)
         {
             return Operation.Run(_logger, nameof(CompileBlocks), PortalErrorCode.InvalidState,
                 () =>
@@ -922,8 +990,9 @@ namespace TiaMcpServer.Siemens
                         ?? throw new PortalException(PortalErrorCode.NotSupported, $"'{path}' cannot be compiled on its own.");
 
                     var result = compiler.Compile();
+                    var own = covered.Where(b => !b.IsConsistent).Select(GetBlockPath).ToList();
 
-                    return (result, covered.Where(b => !b.IsConsistent).Select(GetBlockPath).ToList());
+                    return (result, own, Inconsistent(softwarePath).Where(p => !own.Contains(p)).ToList());
                 },
                 ("softwarePath", softwarePath), ("path", path));
         }

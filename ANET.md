@@ -1,6 +1,6 @@
 # ANet fork (TIAC_Writer)
 
-Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.0.6`.
+Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.0.7`.
 Local only - nothing is pushed.
 
 The fork adds what renaming objects in a real project needed and upstream did not have. All
@@ -33,6 +33,17 @@ table path now also find tables whose name contains `/` (upstream split the path
 
 `GetProject` no longer fails on projects whose attributes hold Openness objects: attribute values
 that the JSON serializer cannot write are reported as text (`Helper.GetAttributeList`).
+
+## What an import leaves inconsistent
+
+An import replaces the whole block, and TIA Portal can mark its instance DB and its callers
+inconsistent even when only a network comment changed (seen live: yes for one FB called from an OB,
+no for another FB and an FC). So `SetNetworkText` and `ReplaceNetworkText` list, from the cross
+references, the instance DBs of the block and what uses the block or those DBs (`Dependents`,
+fail-safe ones in `FailsafeDependents`, which gate the real run like in `RenameMembers`). After a
+real run every export -> edit -> import tool also returns `InconsistentAfter`: the blocks that are
+inconsistent now and were not before - the fact, next to the prediction. `CompileBlock` reports the
+other inconsistent blocks of the PLC as well, not only the ones it compiled.
 
 ## Smaller responses
 
@@ -136,4 +147,4 @@ there. A Release build would overwrite, or fail on, the files of the running ser
 - `ModelContextProtocol/McpPrompts.cs`: class made `partial`.
 - `tests/TiaMcpServer.Test/Test7ToolRegistration.cs`: registers `Engineering.Resolver`, without
   which the `BuildTools` tests fail with "Siemens.Engineering.Step7 not found".
-- `TiaMcpServer.csproj`: `AssemblyVersion` 0.2.0.6, so `--doctor` tells the fork from the original.
+- `TiaMcpServer.csproj`: `AssemblyVersion` 0.2.0.7, so `--doctor` tells the fork from the original.
