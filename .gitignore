@@ -3,3 +3,5 @@ export/
 .gemini/
 .claude/
 .github/
+# local builds; they bundle Siemens assemblies and are not published
+dist/
