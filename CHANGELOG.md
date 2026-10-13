@@ -29,6 +29,11 @@
 - Export -> edit -> import tools state in their message when objects could not be exported and were
   therefore not checked for references.
 
+### Changed (ANet fork, 0.2.1.2)
+
+- The walk over the screens asks `GetCompositionInfos` before `GetComposition`: a composition name
+  the object does not have ended in an exception, four per screen item (minutes on a larger project).
+
 ### Added (ANet fork, 0.2.1.1)
 
 - __`RenameHmiScreens`__: batch rename of screens with swap and one walk over the screens (a walk

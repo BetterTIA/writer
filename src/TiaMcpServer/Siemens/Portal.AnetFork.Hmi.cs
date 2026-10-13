@@ -96,6 +96,11 @@ namespace TiaMcpServer.Siemens
         {
             IEnumerable? items;
 
+            if (!HasComposition(parent, composition))
+            {
+                yield break;
+            }
+
             try
             {
                 items = parent.GetComposition(composition) as IEnumerable;
@@ -112,6 +117,23 @@ namespace TiaMcpServer.Siemens
                 {
                     yield return child;
                 }
+            }
+        }
+
+        /// <summary>
+        /// Asked first because GetComposition throws for a name the object does not have, and an
+        /// exception out of Openness costs about 0.1 s: measured live, minutes on a larger project.
+        /// </summary>
+        private static bool HasComposition(IEngineeringObject parent, string composition)
+        {
+            try
+            {
+                return parent.GetCompositionInfos().Any(c => c.Name == composition);
+            }
+            catch (Exception)
+            {
+                // Let GetComposition decide.
+                return true;
             }
         }
 

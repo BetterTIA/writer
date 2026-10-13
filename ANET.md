@@ -1,6 +1,6 @@
 # ANet fork (TIAC_Writer)
 
-Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.1.1`.
+Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.1.2`.
 Local only - nothing is pushed.
 
 The fork adds what renaming objects in a real project needed and upstream did not have. All
@@ -176,4 +176,4 @@ there. A Release build would overwrite, or fail on, the files of the running ser
 - `ModelContextProtocol/McpPrompts.cs`: class made `partial`.
 - `tests/TiaMcpServer.Test/Test7ToolRegistration.cs`: registers `Engineering.Resolver`, without
   which the `BuildTools` tests fail with "Siemens.Engineering.Step7 not found".
-- `TiaMcpServer.csproj`: `AssemblyVersion` 0.2.1.1, so `--doctor` tells the fork from the original.
+- `TiaMcpServer.csproj`: `AssemblyVersion` 0.2.1.2, so `--doctor` tells the fork from the original.
