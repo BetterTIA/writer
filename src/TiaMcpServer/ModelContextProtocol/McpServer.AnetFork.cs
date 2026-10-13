@@ -41,6 +41,9 @@ namespace TiaMcpServer.ModelContextProtocol
         /// <summary>Fail-safe blocks among the dependents: the safety program has to be compiled again.</summary>
         public IEnumerable<string>? FailsafeDependents { get; set; }
 
+        /// <summary>HMI tags that lose their PLC tag through the rename, as assignments for SetHmiTagPlcTags.</summary>
+        public IEnumerable<string>? HmiDependents { get; set; }
+
         /// <summary>After a real run: blocks that are inconsistent now and were not before the import.</summary>
         public IEnumerable<string>? InconsistentAfter { get; set; }
 
@@ -229,6 +232,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 Dependents = result.Dependents,
                 FailsafeDependents = result.FailsafeDependents,
                 InconsistentAfter = result.InconsistentAfter,
+                HmiDependents = result.HmiDependents,
                 Message = (result.Changes.Count == 0
                     ? "Nothing to change."
                     : result.Applied
@@ -297,7 +301,8 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("renames: 'memberPath=newName' pairs separated by ';', e.g. 'Speed=Velocity; Config.Limit=MaxLimit'. The path is relative to the owner, nested struct members separated by '.'")] string renames,
             [Description("dryRun: true (default) only reports what would change; false imports the edited objects")] bool dryRun = true,
             [Description("allowFailsafe: true allows importing fail-safe blocks, which changes their F-signature")] bool allowFailsafe = false,
-            [Description("summaryOnly: true returns change counts per object and network instead of every change, and writes the complete result to a JSON file whose path is returned")] bool summaryOnly = false)
+            [Description("summaryOnly: true returns change counts per object and network instead of every change, and writes the complete result to a JSON file whose path is returned")] bool summaryOnly = false,
+            [Description("hmiSoftwarePath: path to a WinCC Unified HMI software; when given, the HMI tags that point at a renamed member are listed as HmiDependents, ready for SetHmiTagPlcTags")] string hmiSoftwarePath = "")
         {
             return Guarded(nameof(RenameMembers), () =>
             {
@@ -309,7 +314,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
 
                 return XmlEdited(
-                    Portal.RenameMembers(softwarePath, ownerPath, isType, ParseRenames(renames), dryRun, allowFailsafe),
+                    Portal.RenameMembers(softwarePath, ownerPath, isType, ParseRenames(renames), dryRun, allowFailsafe, hmiSoftwarePath),
                     dryRun, summaryOnly, nameof(RenameMembers));
             });
         }

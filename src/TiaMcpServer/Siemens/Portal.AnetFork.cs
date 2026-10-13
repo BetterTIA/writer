@@ -57,6 +57,12 @@ namespace TiaMcpServer.Siemens
         public List<string> FailsafeDependents { get; set; } = new List<string>();
 
         /// <summary>
+        /// HMI tags whose PLC path passes a renamed member, as "hmiTag=newPlcPath" assignments for
+        /// SetHmiTagPlcTags. Only filled when an HMI software path was given.
+        /// </summary>
+        public List<string> HmiDependents { get; set; } = new List<string>();
+
+        /// <summary>
         /// After a real run: the blocks that are inconsistent now and were not before - what TIA
         /// Portal actually did, as opposed to the prediction in <see cref="Dependents"/>.
         /// Fail-safe blocks carry the suffix " (fail-safe)".
@@ -509,7 +515,8 @@ namespace TiaMcpServer.Siemens
         /// <param name="ownerIsType">True when <paramref name="ownerPath"/> names a PLC data type, false for a block.</param>
         /// <param name="renames">Member path inside the owner ("Config.Speed") to its new name.</param>
         public XmlEditResult RenameMembers(
-            string softwarePath, string ownerPath, bool ownerIsType, IDictionary<string, string> renames, bool dryRun = true, bool allowFailsafe = false)
+            string softwarePath, string ownerPath, bool ownerIsType, IDictionary<string, string> renames, bool dryRun = true, bool allowFailsafe = false,
+            string hmiSoftwarePath = "")
         {
             return Operation.Run(_logger, nameof(RenameMembers), PortalErrorCode.ImportFailed,
                 () =>
@@ -595,6 +602,20 @@ namespace TiaMcpServer.Siemens
                         result.Warnings.AddRange(renamed.Warnings);
 
                         var dependents = exported.Where(e => renamed.Dependents.Contains(e.Name)).ToList();
+
+                        if (!string.IsNullOrEmpty(hmiSoftwarePath))
+                        {
+                            var blocks = new HashSet<string>(renamed.Dependents.Concat(renamed.Changed), StringComparer.OrdinalIgnoreCase) { ownerName };
+
+                            result.HmiDependents = HmiDependents(hmiSoftwarePath, blocks, renames);
+
+                            if (result.HmiDependents.Count > 0)
+                            {
+                                result.Warnings.Add(
+                                    $"{result.HmiDependents.Count} HMI tag(s) point at a renamed member and lose their PLC tag through the import " +
+                                    "(see HmiDependents); keep that list and pass it to 'SetHmiTagPlcTags' afterwards.");
+                            }
+                        }
 
                         result.Dependents = dependents.Select(e => e.Info.Path).ToList();
                         result.FailsafeDependents.InsertRange(0, dependents.Where(e => e.Info.Failsafe).Select(e => e.Info.Path));

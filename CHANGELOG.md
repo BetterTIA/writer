@@ -29,6 +29,13 @@
 - Export -> edit -> import tools state in their message when objects could not be exported and were
   therefore not checked for references.
 
+### Added (ANet fork, 0.2.1.0)
+
+- __WinCC Unified tools__: `GetHmiTags`, `SetHmiTagPlcTags`, `RenameHmiTags`, `RenameHmiScreen`,
+  `ReplaceInHmiScripts`, `SetHmiItemAttribute`, `SetHmiDynamizationTag`, `CompileHmi` - see ANET.md.
+- __`RenameMembers`__ takes `hmiSoftwarePath` and then lists the HMI tags that lose their PLC tag
+  through the rename (`HmiDependents`), as assignments for `SetHmiTagPlcTags`.
+
 ### Changed (ANet fork, 0.2.0.7)
 
 - __Network text tools list their dependents__: an import can leave the instance DB and the callers of

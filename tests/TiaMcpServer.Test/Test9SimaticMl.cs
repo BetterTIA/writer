@@ -347,6 +347,20 @@ namespace TiaMcpServer.Test
 
         #endregion
 
+        #region plc paths of hmi tags
+
+        [TestMethod]
+        public void RenamePlcPath_RenamesWholeMemberSegmentsButNeverTheBlock()
+        {
+            var leaves = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Speed"] = "Velocity", ["DB_Line"] = "X" };
+
+            Assert.AreEqual("DB_Line.Config.Velocity", SimaticMl.RenamePlcPath("DB_Line.Config.Speed", leaves));
+            Assert.AreEqual("\"DB_Line\".Drives[2].\"Velocity\"", SimaticMl.RenamePlcPath("\"DB_Line\".Drives[2].\"Speed\"", leaves));
+            Assert.AreEqual("DB_Line.SpeedLimit", SimaticMl.RenamePlcPath("DB_Line.SpeedLimit", leaves));
+        }
+
+        #endregion
+
         #region reports
 
         [TestMethod]

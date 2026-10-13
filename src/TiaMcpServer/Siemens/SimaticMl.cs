@@ -570,6 +570,28 @@ namespace TiaMcpServer.Siemens
             return result;
         }
 
+        /// <summary>
+        /// A PLC path as an HMI tag holds it ("DB_Line.Config.Speed", segments optionally quoted,
+        /// array indexes in brackets) with the renamed members replaced. Segment by segment, so
+        /// a member is matched whole; the first segment is the block or tag and is never renamed.
+        /// </summary>
+        /// <param name="leaves">Old member name to new member name.</param>
+        public static string RenamePlcPath(string plcPath, IDictionary<string, string> leaves)
+        {
+            var first = true;
+
+            return Regex.Replace(plcPath, "\"[^\"]+\"|[^.\\[\\]\"]+", segment =>
+            {
+                var wasFirst = first;
+
+                first = false;
+
+                return !wasFirst && leaves.TryGetValue(segment.Value.Trim('"'), out var newName)
+                    ? (segment.Value.StartsWith("\"", StringComparison.Ordinal) ? $"\"{newName}\"" : newName)
+                    : segment.Value;
+            });
+        }
+
         private static XElement? Navigate(IEnumerable<XElement> level, IEnumerable<string> path)
         {
             XElement? found = null;
