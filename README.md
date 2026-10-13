@@ -1,5 +1,7 @@
 # TIA-Portal MCP-Server
 
+> **BetterTIA Writer** — this is a fork of [heilingbrunner/tiaportal-mcp](https://github.com/heilingbrunner/tiaportal-mcp) (MIT), branch `anet`. Additions (batch renames, network texts, member renames, WinCC Unified tools, fail-safe impact checks) are described in [ANET.md](ANET.md). Not all of them are verified against a running TIA Portal; ANET.md says which.
+
 A MCP server which connects to Siemens TIA Portal.
 
 ## Features
