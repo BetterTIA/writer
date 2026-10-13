@@ -29,6 +29,12 @@
 - Export -> edit -> import tools state in their message when objects could not be exported and were
   therefore not checked for references.
 
+### Added (ANet fork, 0.2.1.1)
+
+- __`RenameHmiScreens`__: batch rename of screens with swap and one walk over the screens (a walk
+  took minutes on a larger project); `rewriteScripts` also writes the new names
+  into the script lines that hold an old name as a string.
+
 ### Added (ANet fork, 0.2.1.0)
 
 - __WinCC Unified tools__: `GetHmiTags`, `SetHmiTagPlcTags`, `RenameHmiTags`, `RenameHmiScreen`,

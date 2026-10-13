@@ -140,7 +140,20 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("dryRun: true (default) only reports what would change; false renames the screen")] bool dryRun = true)
         {
             return Guarded(nameof(RenameHmiScreen), () =>
-                HmiEdited(Portal.RenameHmiScreen(softwarePath, screenName, newName, dryRun), dryRun, "screen name(s)"));
+                HmiEdited(Portal.RenameHmiScreens(softwarePath, new Dictionary<string, string> { [screenName] = newName }, dryRun), dryRun, "screen name(s)"));
+        }
+
+        [WriteTool]
+        [McpServerTool(Name = "RenameHmiScreens", Title = "Rename HMI screens in a batch", Destructive = true, Idempotent = false, OpenWorld = false, UseStructuredContent = true),
+         Description("Rename many screens of a WinCC Unified device with one walk over the screens (a walk takes minutes, so prefer this over repeated RenameHmiScreen); a new name may be the current name of another screen of the batch, so a swap needs no temporary names. Defaults to a dry run that also lists the script lines holding an old screen name as a string, which TIA Portal does not rewrite; rewriteScripts writes the new names into those lines in the same call")]
+        public static ResponseHmiEdit RenameHmiScreens(
+            [Description("softwarePath: defines the path in the project structure to the HMI software")] string softwarePath,
+            [Description("renames: 'currentName=newName' pairs separated by ';', e.g. 'Station1=Station2; Station2=Station1'")] string renames,
+            [Description("dryRun: true (default) only reports what would change; false renames the screens")] bool dryRun = true,
+            [Description("rewriteScripts: true also replaces the quoted old screen names in script code; false (default) only lists those lines")] bool rewriteScripts = false)
+        {
+            return Guarded(nameof(RenameHmiScreens), () =>
+                HmiEdited(Portal.RenameHmiScreens(softwarePath, ParseRenames(renames), dryRun, rewriteScripts), dryRun, "screen name(s)"));
         }
 
         [WriteTool]

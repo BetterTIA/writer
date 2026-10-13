@@ -460,40 +460,98 @@ namespace TiaMcpServer.Siemens
         }
 
         /// <summary>
-        /// Renames a screen and lists the script lines that hold its name as a string - TIA Portal
-        /// does not rewrite those.
+        /// Renames screens in a batch (swaps included, see BatchRename.Plan) and lists the script
+        /// lines that hold an old name as a string - TIA Portal does not rewrite those. The
+        /// screens are walked once for the whole batch; a walk takes minutes on a real device.
         /// </summary>
-        public HmiEditResult RenameHmiScreen(string softwarePath, string screenName, string newName, bool dryRun = true)
+        /// <param name="rewriteScripts">Also write the new names into those script lines.</param>
+        public HmiEditResult RenameHmiScreens(string softwarePath, IDictionary<string, string> renames, bool dryRun = true, bool rewriteScripts = false)
         {
-            return Operation.Run(_logger, nameof(RenameHmiScreen), PortalErrorCode.RenameFailed,
+            return Operation.Run(_logger, nameof(RenameHmiScreens), PortalErrorCode.RenameFailed,
                 () =>
                 {
-                    EnsureValidName(newName);
-
-                    var hmi = GetHmiSoftwareOrThrow(softwarePath);
-                    var screen = FindScreen(hmi, screenName);
-                    var oldName = Text(screen, "Name");
+                    var all = HmiScreens(GetHmiSoftwareOrThrow(softwarePath)).Select(s => (Name: Text(s, "Name"), Screen: s)).ToList();
                     var result = new HmiEditResult();
+                    var screens = new List<IEngineeringObject>();
+                    var oldNames = new List<string>();
+                    var newNames = new List<string>();
+                    var missing = new List<string>();
 
-                    EnsureFreeName(HmiScreens(hmi).Select(s => Text(s, "Name")), oldName, newName, "screen");
+                    foreach (var rename in renames)
+                    {
+                        EnsureValidName(rename.Value);
 
-                    result.Changes.Add(new XmlChange { Object = oldName, Where = "Name", Old = oldName, New = newName });
-                    result.Usages.AddRange(ScriptUsages(AllSpots(hmi).ToList(), oldName));
+                        var hit = all.FirstOrDefault(s => s.Name.Equals(rename.Key, StringComparison.OrdinalIgnoreCase));
+
+                        if (hit.Screen == null)
+                        {
+                            missing.Add(rename.Key);
+                            continue;
+                        }
+
+                        screens.Add(hit.Screen);
+                        oldNames.Add(hit.Name);
+                        newNames.Add(rename.Value);
+                        result.Changes.Add(new XmlChange { Object = hit.Name, Where = "Name", Old = hit.Name, New = rename.Value });
+                    }
+
+                    if (missing.Count > 0)
+                    {
+                        throw new PortalException(PortalErrorCode.NotFound,
+                            $"No screen named: {string.Join(", ", missing)}. Available: {string.Join(", ", all.Select(s => s.Name))}.");
+                    }
+
+                    if (oldNames.Count == 0)
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidParams, "No renames were given.");
+                    }
+
+                    var steps = BatchRename.Plan(oldNames, newNames, all.Select(s => s.Name).ToList());
+                    var map = Enumerable.Range(0, oldNames.Count).ToDictionary(i => oldNames[i], i => newNames[i]);
+
+                    // One pass over all names, so a swap does not rewrite a line twice.
+                    var quoted = new Regex("([\"'`])(" + string.Join("|", oldNames.OrderByDescending(n => n.Length).Select(Regex.Escape)) + ")\\1");
+
+                    foreach (var spot in all.SelectMany(s => Spots(s.Name, string.Empty, s.Screen)).Where(s => s.Script != null).ToList())
+                    {
+                        var code = spot.Script!.ScriptCode ?? string.Empty;
+
+                        if (!quoted.IsMatch(code))
+                        {
+                            continue;
+                        }
+
+                        result.Usages.AddRange(code.Split('\n').Where(l => quoted.IsMatch(l))
+                            .Select(l => new HmiUsage { Screen = spot.Screen, Item = spot.Item, Where = spot.Where, Kind = "script", Text = l.Trim() }));
+
+                        if (rewriteScripts && !dryRun)
+                        {
+                            spot.Script.ScriptCode = quoted.Replace(code, m => m.Groups[1].Value + map[m.Groups[2].Value] + m.Groups[1].Value);
+                        }
+                    }
 
                     if (result.Usages.Count > 0)
                     {
-                        result.Warnings.Add("Script code names the screen as a string (see Usages); it is not changed here - use 'ReplaceInHmiScripts'.");
+                        result.Warnings.Add(rewriteScripts
+                            ? "The script lines in Usages name a renamed screen as a string; the new names are written into them."
+                            : "Script code names a renamed screen as a string (see Usages); it is not changed here - pass rewriteScripts, or use 'ReplaceInHmiScripts'.");
                     }
 
-                    if (!dryRun)
+                    if (dryRun)
                     {
-                        screen.SetAttribute("Name", newName);
-                        result.Applied = true;
+                        return result;
                     }
+
+                    foreach (var (index, name) in steps)
+                    {
+                        screens[index].SetAttribute("Name", name);
+                    }
+
+                    result.Applied = true;
 
                     return result;
                 },
-                ("softwarePath", softwarePath), ("screenName", screenName), ("newName", newName), ("dryRun", dryRun));
+                ("softwarePath", softwarePath), ("count", renames.Count), ("dryRun", dryRun), ("rewriteScripts", rewriteScripts));
         }
 
         /// <summary>

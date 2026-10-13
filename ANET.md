@@ -1,6 +1,6 @@
 # ANet fork (TIAC_Writer)
 
-Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.1.0`.
+Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.1.1`.
 Local only - nothing is pushed.
 
 The fork adds what renaming objects in a real project needed and upstream did not have. All
@@ -45,6 +45,7 @@ All of them use setters; every write tool defaults to `dryRun=true`.
 | `SetHmiTagPlcTags`       | `hmiTag=plcPath` pairs; with `plcSoftwarePath` the start of each path is checked             |
 | `RenameHmiTags`          | batch rename with swap; lists tag dynamizations and script lines that use the old names      |
 | `RenameHmiScreen`        | renames a screen; lists script lines that hold its name as a string                          |
+| `RenameHmiScreens`       | 0.2.1.1: batch with swap in one walk over the screens; `rewriteScripts` fixes the script lines |
 | `ReplaceInHmiScripts`    | `find=replace` pairs in one pass over event handlers and script dynamizations                |
 | `SetHmiItemAttribute`    | one attribute of a screen item or screen: name, text (one language), graphic, ...            |
 | `SetHmiDynamizationTag`  | the tag of one tag dynamization                                                              |
@@ -175,4 +176,4 @@ there. A Release build would overwrite, or fail on, the files of the running ser
 - `ModelContextProtocol/McpPrompts.cs`: class made `partial`.
 - `tests/TiaMcpServer.Test/Test7ToolRegistration.cs`: registers `Engineering.Resolver`, without
   which the `BuildTools` tests fail with "Siemens.Engineering.Step7 not found".
-- `TiaMcpServer.csproj`: `AssemblyVersion` 0.2.1.0, so `--doctor` tells the fork from the original.
+- `TiaMcpServer.csproj`: `AssemblyVersion` 0.2.1.1, so `--doctor` tells the fork from the original.

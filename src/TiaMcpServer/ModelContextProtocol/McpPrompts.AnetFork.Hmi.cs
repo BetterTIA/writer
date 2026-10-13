@@ -78,6 +78,24 @@ Use the RenameHmiScreen tool with these parameters:
 - dryRun: {dryRun}";
         }
 
+        [McpServerPrompt(Name = "RenameHmiScreens"), Description("Rename many screens at once, swaps included")]
+        public static string RenameHmiScreens(string softwarePath, string renames, string dryRun = "true", string rewriteScripts = "false")
+        {
+            return $@"Rename many screens of a WinCC Unified device with one walk over the screens. Run it with dryRun true first and show the script lines that hold an old screen name as a string; TIA Portal does not rewrite those (requires the server started with '--allow-write').
+
+Common parameter values:
+- softwarePath: defines the path in the project structure to the HMI software
+- renames: 'currentName=newName' pairs separated by ';', e.g. 'Station1=Station2; Station2=Station1'
+- dryRun: true only reports what would change; false renames the screens
+- rewriteScripts: true also writes the new names into the script lines; false only lists them
+
+Use the RenameHmiScreens tool with these parameters:
+- softwarePath: {softwarePath}
+- renames: {renames}
+- dryRun: {dryRun}
+- rewriteScripts: {rewriteScripts}";
+        }
+
         [McpServerPrompt(Name = "ReplaceInHmiScripts"), Description("Replace text in the scripts of a WinCC Unified device")]
         public static string ReplaceInHmiScripts(string softwarePath, string replacements, string screenName = "", string dryRun = "true")
         {
