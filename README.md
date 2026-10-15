@@ -1,6 +1,6 @@
 # TIA-Portal MCP-Server
 
-> **BetterTIA Writer** — this is a fork of [heilingbrunner/tiaportal-mcp](https://github.com/heilingbrunner/tiaportal-mcp) (MIT). Additions (batch renames, network texts, member renames, WinCC Unified tools, hardware and network writes, fail-safe impact checks) are described in [ANET.md](ANET.md). Not all of them are verified against a running TIA Portal; ANET.md says which.
+> **BetterTIA Writer** — this is a fork of [heilingbrunner/tiaportal-mcp](https://github.com/heilingbrunner/tiaportal-mcp) (MIT). Additions (batch renames, network texts, member renames, WinCC Unified tools, hardware and network writes, fail-safe impact checks, name collision and content hash checks, an audit file) are described in [ANET.md](ANET.md). Not all of them are verified against a running TIA Portal; ANET.md says which.
 >
 > Part of the [BetterTIA](https://github.com/BetterTIA) set: [reader](https://github.com/BetterTIA/reader) · **writer** (this repository) · [editor](https://github.com/BetterTIA/editor) · [watch](https://github.com/BetterTIA/watch). The BetterTIA additions are developed, used and tested only with TIA Portal V21.
 

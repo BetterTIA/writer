@@ -573,6 +573,7 @@ namespace TiaMcpServer.Siemens
                             $"Block not found at '{blockPath}'. Use 'GetBlocks' to list the available blocks.");
 
                     EnsureNotKnowHowProtected(block);
+                    EnsureCpuNameFree(softwarePath, block.Name, newName);
                     block.Name = newName;
 
                     return true;
@@ -601,6 +602,8 @@ namespace TiaMcpServer.Siemens
                         ?? throw new PortalException(PortalErrorCode.NotFound,
                             $"Block group not found at '{groupPath}'.");
 
+                    EnsureCpuNameFree(softwarePath, null, name);
+
                     return group.Blocks.CreateFB(name, autoNumber, number, parsedLanguage);
                 },
                 ("softwarePath", softwarePath), ("groupPath", groupPath), ("name", name), ("language", language));
@@ -623,6 +626,8 @@ namespace TiaMcpServer.Siemens
                     var group = GetPlcBlockGroupByPath(softwarePath, groupPath)
                         ?? throw new PortalException(PortalErrorCode.NotFound,
                             $"Block group not found at '{groupPath}'.");
+
+                    EnsureCpuNameFree(softwarePath, null, name);
 
                     return group.Blocks.CreateInstanceDB(name, autoNumber, number, instanceOfName);
                 },

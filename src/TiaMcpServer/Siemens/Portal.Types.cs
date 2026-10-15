@@ -439,6 +439,7 @@ namespace TiaMcpServer.Siemens
                             $"Type not found at '{typePath}'. Use 'GetTypes' to list the available types.");
 
                     EnsureNotKnowHowProtected(type);
+                    EnsureCpuNameFree(softwarePath, type.Name, newName);
                     type.Name = newName;
 
                     return true;

@@ -47,6 +47,9 @@ namespace TiaMcpServer.ModelContextProtocol
         public string? HeaderName { get; set; }
         public DateTime? ModifiedDate { get; set; }
         public bool? IsKnowHowProtected { get; set; }
+
+        /// <summary>Only from ExportBlocksAsDocuments: 'documents:sha256:...' over the files written for this block.</summary>
+        public string? ContentHash { get; set; }
         public string? Description { get; set; }
     }
     public class ResponseBlocksWithHierarchy : ResponseMessage
@@ -348,6 +351,8 @@ namespace TiaMcpServer.ModelContextProtocol
 
     public class ResponseExportXmlBlock : ResponseMessage
     {
+        /// <summary>'xml:sha256:...' over the exported file, for expectedContentHash of the import tools.</summary>
+        public string? ContentHash { get; set; }
     }
 
     public class ResponseImportXmlBlock : ResponseMessage
@@ -381,6 +386,8 @@ namespace TiaMcpServer.ModelContextProtocol
 
     public class ResponseExportAsDocuments : ResponseMessage
     {
+        /// <summary>'documents:sha256:...' over the .s7dcl and .s7res files, for expectedContentHash of ImportFromDocuments.</summary>
+        public string? ContentHash { get; set; }
     }
 
     public class ResponseExportBlocksAsDocuments : ResponseMessage

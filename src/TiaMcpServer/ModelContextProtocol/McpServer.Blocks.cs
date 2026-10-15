@@ -166,9 +166,14 @@ namespace TiaMcpServer.ModelContextProtocol
                 var block = Portal.ExportXmlBlock(softwarePath, blockPath, exportPath, preservePath);
                 if (block is not null)
                 {
+                    var file = preservePath
+                        ? System.IO.Path.Combine(exportPath, GroupPathOf(Portal.GetBlockPath(block)).Replace('/', '\\'), $"{block.Name}.xml")
+                        : System.IO.Path.Combine(exportPath, $"{block.Name}.xml");
+
                     return new ResponseExportXmlBlock
                     {
-                        Message = $"Block exported from '{blockPath}' to '{exportPath}'",
+                        ContentHash = ContentHash.OfFiles(ContentHash.Xml, file),
+                        Message = $"Block exported from '{blockPath}' to '{exportPath}'. Pass ContentHash as expectedContentHash to ImportXmlBlock, SetNetworkText, ReplaceNetworkText or RenameMembers to refuse the write when the block changed in between",
                         Meta = new JsonObject
                         {
                             ["timestamp"] = DateTime.Now,
@@ -297,10 +302,18 @@ namespace TiaMcpServer.ModelContextProtocol
         public static ResponseImportXmlBlock ImportXmlBlock(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
             [Description("groupPath: defines the path in the project structure to the group, where to import the block")] string groupPath,
-            [Description("importPath: defines the path of the xml file from where to import the block")] string importPath)
+            [Description("importPath: defines the path of the xml file from where to import the block")] string importPath,
+            [Description("expectedContentHash: the ContentHash ExportXmlBlock returned for this block; the import is refused with 'state_changed' when the block changed since. Empty skips the check")] string expectedContentHash = "")
         {
             try
             {
+                if (!string.IsNullOrWhiteSpace(expectedContentHash))
+                {
+                    // Compared against a fresh export right before the write, by the tool that writes.
+                    var name = SimaticMl.ObjectName(System.Xml.Linq.XDocument.Load(importPath));
+                    Portal.VerifyBlockContentHash(softwarePath, JoinPath(groupPath, name), expectedContentHash);
+                }
+
                 if (Portal.ImportXmlBlock(softwarePath, groupPath, importPath))
                 {
                     return new ResponseImportXmlBlock
@@ -317,6 +330,10 @@ namespace TiaMcpServer.ModelContextProtocol
                 {
                     throw new McpException($"Failed importing block from '{importPath}' to '{groupPath}'");
                 }
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {

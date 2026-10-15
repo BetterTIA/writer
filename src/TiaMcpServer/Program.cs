@@ -86,8 +86,26 @@ namespace TiaMcpServer
                 .GetMethods(BindingFlags.Public | BindingFlags.Static)
                 .Where(m => m.GetCustomAttribute<global::ModelContextProtocol.Server.McpServerToolAttribute>() != null)
                 .Where(m => allowWrite || m.GetCustomAttribute<WriteToolAttribute>() == null)
-                .Select(m => PortalSelection.Apply(m, global::ModelContextProtocol.Server.McpServerTool.Create(m)))
+                .Select(m => Audited(m, PortalSelection.Apply(m, global::ModelContextProtocol.Server.McpServerTool.Create(m))))
                 .ToList();
+        }
+
+        /// <summary>
+        /// Every project-mutating tool gets one audit record per call (WriteAudit): the
+        /// [WriteTool] ones, and the save and import tools upstream registers unconditionally.
+        /// </summary>
+        private static global::ModelContextProtocol.Server.McpServerTool Audited(MethodInfo method, global::ModelContextProtocol.Server.McpServerTool tool)
+        {
+            var name = tool.ProtocolTool.Name;
+
+            if (method.GetCustomAttribute<WriteToolAttribute>() != null
+                || name.StartsWith("Import", StringComparison.Ordinal)
+                || name.StartsWith("Save", StringComparison.Ordinal))
+            {
+                WriteAudit.Track(name);
+            }
+
+            return tool;
         }
 
         public static async Task RunStdioHost(CliOptions? options)
@@ -154,6 +172,7 @@ namespace TiaMcpServer
                     .WithStdioServerTransport()
                     .WithRequestFilters(filters =>
                     {
+                        filters.AddCallToolFilter(WriteAudit.Filter);
                         filters.AddCallToolFilter(PortalSelection.Filter);
                         filters.AddListToolsFilter(ToolOrdering.Filter);
                         filters.AddGetPromptFilter(PromptArguments.Filter);

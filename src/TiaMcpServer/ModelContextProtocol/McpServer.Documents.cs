@@ -306,9 +306,12 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
                 if (Portal.ExportAsDocuments(softwarePath, blockPath, exportPath, preservePath))
                 {
+                    var name = blockPath.Contains("/") ? blockPath.Substring(blockPath.LastIndexOf('/') + 1) : blockPath;
+
                     return new ResponseExportAsDocuments
                     {
-                        Message = $"Documents exported from '{blockPath}' to '{exportPath}'",
+                        ContentHash = DocumentsHash(exportPath, preservePath ? GroupPathOf(blockPath) : string.Empty, name),
+                        Message = $"Documents exported from '{blockPath}' to '{exportPath}'. Pass ContentHash as expectedContentHash to ImportFromDocuments to refuse the write when the block changed in between",
                         Meta = new JsonObject
                         {
                             ["timestamp"] = DateTime.Now,
@@ -404,6 +407,7 @@ namespace TiaMcpServer.ModelContextProtocol
                                 HeaderName = block.HeaderName,
                                 ModifiedDate = block.ModifiedDate,
                                 IsKnowHowProtected = block.IsKnowHowProtected,
+                                ContentHash = DocumentsHash(exportPath, preservePath ? GroupPathOf(Portal.GetBlockPath(block)) : string.Empty, block.Name),
                                 Attributes = attributes,
                                 Description = block.ToString()
                             });
@@ -452,7 +456,8 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("groupPath: optional path within the PLC program where the block should be placed (empty for root)")] string groupPath,
             [Description("importPath: directory containing the document files (.s7dcl/.s7res)")] string importPath,
             [Description("fileNameWithoutExtension: name of the block file without extension") ] string fileNameWithoutExtension,
-            [Description("importOption: ImportDocumentOptions value (None, Override, SkipInactiveCultures, ActivateInactiveCultures)")] string importOption = "Override")
+            [Description("importOption: ImportDocumentOptions value (None, Override, SkipInactiveCultures, ActivateInactiveCultures)")] string importOption = "Override",
+            [Description("expectedContentHash: the ContentHash ExportAsDocuments or ExportBlocksAsDocuments returned for this block; the import is refused with 'state_changed' when the block changed since. Empty skips the check")] string expectedContentHash = "")
         {
             try
             {
@@ -483,6 +488,9 @@ namespace TiaMcpServer.ModelContextProtocol
                     Logger?.LogDebug(ex, "Failed to evaluate .s7res warnings");
                 }
 
+                // Compared against a fresh export right before the write, by the tool that writes.
+                Portal.VerifyBlockContentHash(softwarePath, JoinPath(groupPath, fileNameWithoutExtension), expectedContentHash);
+
                 var ok = Portal.ImportFromDocuments(softwarePath, groupPath, importPath, fileNameWithoutExtension, option);
                 if (ok)
                 {
@@ -501,6 +509,10 @@ namespace TiaMcpServer.ModelContextProtocol
                 {
                     throw new McpException($"Failed importing '{fileNameWithoutExtension}' from '{importPath}'");
                 }
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException(pex.Message, pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {

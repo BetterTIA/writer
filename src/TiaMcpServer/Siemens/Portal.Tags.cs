@@ -599,6 +599,8 @@ namespace TiaMcpServer.Siemens
 
                     var table = RequireTagTable(softwarePath, tagTablePath);
 
+                    EnsureCpuNameFree(softwarePath, null, name);
+
                     return string.IsNullOrWhiteSpace(dataTypeName)
                         ? table.Tags.Create(name)
                         : table.Tags.Create(name, dataTypeName, logicalAddress);
@@ -635,6 +637,7 @@ namespace TiaMcpServer.Siemens
                     if (newName != null)
                     {
                         EnsureValidName(newName, allowSlash: true);
+                        EnsureCpuNameFree(softwarePath, tag.Name, newName);
                         tag.Name = newName;
                     }
 
@@ -666,6 +669,8 @@ namespace TiaMcpServer.Siemens
                     EnsureValidName(name);
 
                     var table = RequireTagTable(softwarePath, tagTablePath);
+
+                    EnsureCpuNameFree(softwarePath, null, name);
 
                     return string.IsNullOrWhiteSpace(dataTypeName)
                         ? table.UserConstants.Create(name)

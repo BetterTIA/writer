@@ -1,6 +1,6 @@
 # ANet fork (TIAC_Writer)
 
-Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.2.0`.
+Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.3.0`.
 Local only - nothing is pushed.
 
 The fork adds what renaming objects in a real project needed and upstream did not have. All
@@ -33,6 +33,42 @@ table path now also find tables whose name contains `/` (upstream split the path
 
 `GetProject` no longer fails on projects whose attributes hold Openness objects: attribute values
 that the JSON serializer cannot write are reported as text (`Helper.GetAttributeList`).
+
+## Write safeguards (0.2.3.0)
+
+Three checks every write runs through, modelled on Czarnak/tia-portal-mcp (MIT):
+
+- __Name collisions right before the write.__ A new name is checked against every symbol of the
+  CPU - tags, user constants, blocks, system blocks, technology objects, PLC data types - not
+  only against the namespace of the renamed object (`RenameTags` compared with other tags only,
+  `RenameObjects` with blocks, technology objects and types only, the upstream `RenameBlock` and
+  `RenameType` with nothing). The message names what holds the name. Applied in `RenameTags`,
+  `RenameObjects`, `RenameTechnologicalObject`, `RenameBlock`, `RenameType`, `UpdateTag` (new
+  name), `CreateTag`, `CreateUserConstant`, `CreateFB`, `CreateInstanceDB`; a dry run reports the
+  collision as well, because the check runs before the plan.
+- __Content hash on the import paths.__ `ExportXmlBlock` returns `ContentHash`
+  (`xml:sha256:<hex>` over the exported file), `ExportAsDocuments` and `ExportBlocksAsDocuments`
+  return `documents:sha256:<hex>` over the `.s7dcl` and `.s7res` files (per block in `Items`).
+  `ImportXmlBlock`, `ImportFromDocuments`, `SetNetworkText`, `ReplaceNetworkText` and
+  `RenameMembers` take `expectedContentHash`: right before the write the Writer exports the
+  block (for `RenameMembers` the owner) again and refuses with `state_changed` when the hashes
+  differ, when the block no longer exists, or when it is inconsistent now (TIA Portal exports no
+  inconsistent block). Both sides are computed by the Writer over its own exports; a hash from
+  another tool does not compare. The parameter is optional everywhere, for the callers that
+  existed before; the BetterTIA Editor is meant to pass it always.
+- __Audit.__ One JSON line per call of a write tool (every `[WriteTool]`, plus the `Import*` and
+  `Save*` tools upstream registers unconditionally): time, tool, arguments with strings cut at
+  200 characters (no block contents), `dryRun`, outcome and duration, written to
+  `%LOCALAPPDATA%\BetterTIA\Writer\audit\writer-audit-<yyyy-MM>.jsonl` (or the directory in
+  `TIAMCP_AUDIT_DIR`), append only. Refused and failed calls are recorded too. A record that
+  cannot be written is logged and does not fail the call.
+
+Verified without TIA Portal: `ContentHash` and the audit record (`Test11Safeguards`), build,
+registration. Not verified against a running TIA Portal: whether two exports of an unchanged
+block are byte-identical (the hash assumes it; if TIA Portal writes a timestamp into an export,
+every comparison fails and the hash is useless - the first live test must check this), the
+system block enumeration, and the cost of `CpuNames` on a large PLC (it reads every tag, block
+and type once per rename).
 
 ## Hardware and network (0.2.2.0)
 
@@ -208,4 +244,10 @@ there. A Release build would overwrite, or fail on, the files of the running ser
 - `ModelContextProtocol/McpPrompts.cs`: class made `partial`.
 - `tests/TiaMcpServer.Test/Test7ToolRegistration.cs`: registers `Engineering.Resolver`, without
   which the `BuildTools` tests fail with "Siemens.Engineering.Step7 not found".
-- `TiaMcpServer.csproj`: `AssemblyVersion` 0.2.1.2, so `--doctor` tells the fork from the original.
+- `Siemens/Portal.Blocks.cs`, `Siemens/Portal.Types.cs`, `Siemens/Portal.Tags.cs`: `RenameBlock`, `CreateFB`,
+  `CreateInstanceDB`, `RenameType`, `CreateTag`, `UpdateTag`, `CreateUserConstant` call
+  `EnsureCpuNameFree` (0.2.3.0).
+- `ModelContextProtocol/McpServer.Blocks.cs`, `McpServer.Documents.cs`, `Responses.cs`: `ContentHash` on the
+  XML and document exports, `expectedContentHash` on `ImportXmlBlock` and `ImportFromDocuments` (0.2.3.0).
+- `Program.cs`: the `WriteAudit` call-tool filter and the tracking of the audited tools (0.2.3.0).
+- `TiaMcpServer.csproj`: `AssemblyVersion` 0.2.3.0, so `--doctor` tells the fork from the original.

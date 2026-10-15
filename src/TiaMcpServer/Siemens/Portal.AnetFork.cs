@@ -249,10 +249,8 @@ namespace TiaMcpServer.Siemens
                         ?? throw new PortalException(PortalErrorCode.NotFound,
                             $"Technology object '{name}' not found. Available: {string.Join(", ", objects.Select(t => t.Name))}.");
 
-                    // A technology object is a data block and shares the block namespace.
-                    EnsureFreeName(
-                        objects.Select(t => t.Name).Concat(GetBlocks(softwarePath).Select(b => b.Name)),
-                        technologicalObject.Name, newName, "block or technology object");
+                    // A technology object is a data block and shares the CPU-wide symbol namespace.
+                    EnsureCpuNameFree(softwarePath, technologicalObject.Name, newName);
                     technologicalObject.Name = newName;
 
                     return true;
@@ -463,8 +461,10 @@ namespace TiaMcpServer.Siemens
         /// networks in the XML, and imports it back over itself.
         /// </summary>
         /// <param name="edit">One of the SimaticMl network text edits; returns what it changed.</param>
+        /// <param name="expectedContentHash">The 'xml' hash ExportXmlBlock returned for the block; the import is refused when the block changed since. Empty skips the check.</param>
         public XmlEditResult EditNetworkTexts(
-            string softwarePath, string blockPath, Func<XDocument, List<XmlChange>> edit, bool dryRun = true, bool allowFailsafe = false)
+            string softwarePath, string blockPath, Func<XDocument, List<XmlChange>> edit, bool dryRun = true, bool allowFailsafe = false,
+            string expectedContentHash = "")
         {
             return Operation.Run(_logger, nameof(EditNetworkTexts), PortalErrorCode.ImportFailed,
                 () =>
@@ -483,6 +483,9 @@ namespace TiaMcpServer.Siemens
                     try
                     {
                         var exported = ExportForEdit(block, directory, 0);
+
+                        VerifyExportedHash(exported, expectedContentHash);
+
                         var result = new XmlEditResult { Changes = edit(exported.Doc) };
 
                         if (result.Changes.Count == 0)
@@ -516,7 +519,7 @@ namespace TiaMcpServer.Siemens
         /// <param name="renames">Member path inside the owner ("Config.Speed") to its new name.</param>
         public XmlEditResult RenameMembers(
             string softwarePath, string ownerPath, bool ownerIsType, IDictionary<string, string> renames, bool dryRun = true, bool allowFailsafe = false,
-            string hmiSoftwarePath = "")
+            string hmiSoftwarePath = "", string expectedContentHash = "")
         {
             return Operation.Run(_logger, nameof(RenameMembers), PortalErrorCode.ImportFailed,
                 () =>
@@ -582,6 +585,8 @@ namespace TiaMcpServer.Siemens
                                 result.FailsafeDependents.Add($"{GetBlockPath(block)} (not exported, dependence unknown)");
                             }
                         }
+
+                        VerifyExportedHash(exported.FirstOrDefault(e => e.Name.Equals(ownerName, StringComparison.OrdinalIgnoreCase)), expectedContentHash);
 
                         var docs = new Dictionary<string, XDocument>(StringComparer.OrdinalIgnoreCase);
                         var tagTypes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -700,8 +705,18 @@ namespace TiaMcpServer.Siemens
         /// </summary>
         private BatchRenameResult RenameBatch(string softwarePath, List<Renamable> items, IEnumerable<string> allNames, bool dryRun, bool allowFailsafe)
         {
+            // Right before the plan, against every symbol of the CPU - tags, constants, blocks, system
+            // blocks, technology objects, types - not only against the namespace of the batch.
+            var cpuNames = CpuNames(softwarePath);
+            var moving = new HashSet<string>(items.Select(i => i.Info.OldName), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var item in items.Where(i => !moving.Contains(i.Info.NewName)))
+            {
+                EnsureCpuNameFree(cpuNames, item.Info.OldName, item.Info.NewName);
+            }
+
             var steps = BatchRename.Plan(
-                items.Select(i => i.Info.OldName).ToList(), items.Select(i => i.Info.NewName).ToList(), allNames);
+                items.Select(i => i.Info.OldName).ToList(), items.Select(i => i.Info.NewName).ToList(), allNames.Concat(cpuNames.Keys));
 
             LoadSafetyBlocks(softwarePath);
             var failsafeBlocks = new HashSet<string>(GetBlocks(softwarePath).Where(IsFailsafe).Select(b => b.Name), StringComparer.OrdinalIgnoreCase);

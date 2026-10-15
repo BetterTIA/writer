@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added (ANet fork, 0.2.3.0)
+
+- __Name collisions checked right before the write__ against every symbol of the CPU (tags,
+  constants, blocks, system blocks, technology objects, types) in the rename and create tools;
+  the message names what holds the name.
+- __Content hash__: `ExportXmlBlock`, `ExportAsDocuments` and `ExportBlocksAsDocuments` return
+  `ContentHash`; `ImportXmlBlock`, `ImportFromDocuments`, `SetNetworkText`, `ReplaceNetworkText`
+  and `RenameMembers` take `expectedContentHash` and refuse with `state_changed` when the block
+  changed since the export.
+- __Audit__: one JSON line per write tool call in `%LOCALAPPDATA%\BetterTIA\Writer\audit\`
+  (or `TIAMCP_AUDIT_DIR`), append only - see ANET.md.
+
 ### Added (ANet fork, 0.2.2.0)
 
 - __Hardware and network writes__: `AddDevice` (device from a catalog type identifier), `ConfigureNode`

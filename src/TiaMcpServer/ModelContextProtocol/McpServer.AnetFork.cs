@@ -253,11 +253,12 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("comment: the new network comment; leave out to keep the current one")] string? comment = null,
             [Description("culture: language of the text, e.g. en-US; may stay empty when the project has one language")] string culture = "",
             [Description("dryRun: true (default) only reports what would change; false imports the edited block")] bool dryRun = true,
-            [Description("allowFailsafe: true allows importing a fail-safe block, which changes its F-signature")] bool allowFailsafe = false)
+            [Description("allowFailsafe: true allows importing a fail-safe block, which changes its F-signature")] bool allowFailsafe = false,
+            [Description("expectedContentHash: the ContentHash ExportXmlBlock returned for this block; the import is refused with 'state_changed' when the block changed since. Empty skips the check")] string expectedContentHash = "")
         {
             return Guarded(nameof(SetNetworkText), () => XmlEdited(
                 Portal.EditNetworkTexts(softwarePath, blockPath,
-                    doc => SimaticMl.SetNetworkText(doc, network, title, comment, culture), dryRun, allowFailsafe),
+                    doc => SimaticMl.SetNetworkText(doc, network, title, comment, culture), dryRun, allowFailsafe, expectedContentHash),
                 dryRun));
         }
 
@@ -271,7 +272,8 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("scope: 'networks' (default) for network titles and comments only, 'all' to include the block title and comment and GRAPH texts")] string scope = "networks",
             [Description("culture: restrict the replacement to one language, e.g. en-US; empty replaces in every language")] string culture = "",
             [Description("dryRun: true (default) only reports what would change; false imports the edited block")] bool dryRun = true,
-            [Description("allowFailsafe: true allows importing a fail-safe block, which changes its F-signature")] bool allowFailsafe = false)
+            [Description("allowFailsafe: true allows importing a fail-safe block, which changes its F-signature")] bool allowFailsafe = false,
+            [Description("expectedContentHash: the ContentHash ExportXmlBlock returned for this block; the import is refused with 'state_changed' when the block changed since. Empty skips the check")] string expectedContentHash = "")
         {
             return Guarded(nameof(ReplaceNetworkText), () =>
             {
@@ -286,7 +288,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
                 return XmlEdited(
                     Portal.EditNetworkTexts(softwarePath, blockPath,
-                        doc => SimaticMl.ReplaceNetworkText(doc, pairs, culture, all), dryRun, allowFailsafe),
+                        doc => SimaticMl.ReplaceNetworkText(doc, pairs, culture, all), dryRun, allowFailsafe, expectedContentHash),
                     dryRun);
             });
         }
@@ -302,7 +304,8 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("dryRun: true (default) only reports what would change; false imports the edited objects")] bool dryRun = true,
             [Description("allowFailsafe: true allows importing fail-safe blocks, which changes their F-signature")] bool allowFailsafe = false,
             [Description("summaryOnly: true returns change counts per object and network instead of every change, and writes the complete result to a JSON file whose path is returned")] bool summaryOnly = false,
-            [Description("hmiSoftwarePath: path to a WinCC Unified HMI software; when given, the HMI tags that point at a renamed member are listed as HmiDependents, ready for SetHmiTagPlcTags")] string hmiSoftwarePath = "")
+            [Description("hmiSoftwarePath: path to a WinCC Unified HMI software; when given, the HMI tags that point at a renamed member are listed as HmiDependents, ready for SetHmiTagPlcTags")] string hmiSoftwarePath = "",
+            [Description("expectedContentHash: the ContentHash ExportXmlBlock returned for the owner; the import is refused with 'state_changed' when the owner changed since. Empty skips the check")] string expectedContentHash = "")
         {
             return Guarded(nameof(RenameMembers), () =>
             {
@@ -314,7 +317,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 }
 
                 return XmlEdited(
-                    Portal.RenameMembers(softwarePath, ownerPath, isType, ParseRenames(renames), dryRun, allowFailsafe, hmiSoftwarePath),
+                    Portal.RenameMembers(softwarePath, ownerPath, isType, ParseRenames(renames), dryRun, allowFailsafe, hmiSoftwarePath, expectedContentHash),
                     dryRun, summaryOnly, nameof(RenameMembers));
             });
         }
@@ -339,6 +342,18 @@ namespace TiaMcpServer.ModelContextProtocol
             }
 
             return result;
+        }
+
+        /// <summary>The group part of a root-relative path, empty at the root.</summary>
+        public static string GroupPathOf(string path) =>
+            path.Contains("/") ? path.Substring(0, path.LastIndexOf('/')) : string.Empty;
+
+        /// <summary>Hash of the .s7dcl and .s7res files an export as documents wrote for one block.</summary>
+        private static string DocumentsHash(string exportPath, string groupPath, string blockName)
+        {
+            var directory = groupPath.Length > 0 ? Path.Combine(exportPath, groupPath.Replace('/', '\\')) : exportPath;
+
+            return ContentHash.OfFiles(ContentHash.Documents, Path.Combine(directory, $"{blockName}.s7dcl"), Path.Combine(directory, $"{blockName}.s7res"));
         }
 
         #endregion
