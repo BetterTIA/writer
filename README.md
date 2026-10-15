@@ -247,7 +247,7 @@ These are not gaps in this server - the underlying API offers no operation for t
 - Built on the [ModelContextProtocol](https://www.nuget.org/packages/ModelContextProtocol) .NET SDK **2.2.0**.
 - Protocol revisions negotiated during `initialize`: `2024-11-05`, `2025-03-26`, `2025-06-18`, `2025-11-25` (the SDK picks the highest the client also supports).
 - Every tool advertises a human-readable `title` and behaviour annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`).
-- 42 of the 58 read tools and all 79 write tools publish an `outputSchema` and return `structuredContent`.
+- 50 of the 66 read tools and all 79 write tools publish an `outputSchema` and return `structuredContent`.
 - Long-running export/import tools report progress via `notifications/progress` when the client supplies a `progressToken`.
 - Tool failures are returned as tool results with `isError: true` (not JSON-RPC errors), so the model can read the message and retry.
 
