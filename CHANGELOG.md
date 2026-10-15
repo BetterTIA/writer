@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added (ANet fork, 0.2.2.0)
+
+- __Hardware and network writes__: `AddDevice` (device from a catalog type identifier), `ConfigureNode`
+  (IP address, subnet mask, PROFINET name, subnet and IO system of exactly one node, read back and
+  verified), `CreateSubnet`, `UpdateSubnet`, `DeleteSubnet`. Exact selectors (`NodeId`, `SubnetId`,
+  IO system number), `dryRun` by default, fail-safe hardware refused - see ANET.md.
+
 ### Added (ANet fork, branch `anet`, 0.2.0.1)
 
 - __Group and technology object renames__: `RenameBlockGroup`, `RenameTypeGroup`, `RenameTagTableGroup`,

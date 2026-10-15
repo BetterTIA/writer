@@ -1,6 +1,6 @@
 # TIA-Portal MCP-Server
 
-> **BetterTIA Writer** — this is a fork of [heilingbrunner/tiaportal-mcp](https://github.com/heilingbrunner/tiaportal-mcp) (MIT). Additions (batch renames, network texts, member renames, WinCC Unified tools, fail-safe impact checks) are described in [ANET.md](ANET.md). Not all of them are verified against a running TIA Portal; ANET.md says which.
+> **BetterTIA Writer** — this is a fork of [heilingbrunner/tiaportal-mcp](https://github.com/heilingbrunner/tiaportal-mcp) (MIT). Additions (batch renames, network texts, member renames, WinCC Unified tools, hardware and network writes, fail-safe impact checks) are described in [ANET.md](ANET.md). Not all of them are verified against a running TIA Portal; ANET.md says which.
 >
 > Part of the [BetterTIA](https://github.com/BetterTIA) set: [reader](https://github.com/BetterTIA/reader) · **writer** (this repository) · [editor](https://github.com/BetterTIA/editor) · [watch](https://github.com/BetterTIA/watch). The BetterTIA additions are developed, used and tested only with TIA Portal V21.
 
@@ -64,10 +64,11 @@ Read-only tools (62) are always available.
 | Type documents (V21+)         | `ExportTypeAsDocuments`, `ExportTypesAsDocuments`                                                                                                                                                      |
 | Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockSource`, `GetTypeSource`, `GetBlockInterface`, `PreviewImport`, `OpenTiaProject`, `ExportPlcAsDocuments`, `ExportSources` |
 
-Write tools (62) require `--allow-write`. Twelve of them are additions of the ANet fork (`RenameBlockGroup`,
+Write tools (67) require `--allow-write`. Seventeen of them are additions of the ANet fork (`RenameBlockGroup`,
 `RenameTypeGroup`, `RenameTagTableGroup`, `RenameWatchTableGroup`, `RenameTechnologicalObject`,
 `RenameTags`, `RenameObjects`, `SetTagComment`, `ReplaceTagComments`, `SetNetworkText`,
-`ReplaceNetworkText`, `RenameMembers`), as is the read-side `CompileBlock` - see [ANET.md](ANET.md).
+`ReplaceNetworkText`, `RenameMembers`, `AddDevice`, `ConfigureNode`, `CreateSubnet`, `UpdateSubnet`,
+`DeleteSubnet`), as is the read-side `CompileBlock` - see [ANET.md](ANET.md).
 
 | Area                  | Tools                                                                                                                                                   |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -79,6 +80,7 @@ Write tools (62) require `--allow-write`. Twelve of them are additions of the AN
 | Watch tables          | `CreateWatchTable`, `RenameWatchTable`, `DeleteWatchTable`, `CreateWatchTableGroup`, `DeleteWatchTableGroup`, `ImportWatchTable`                        |
 | External sources      | `CreateExternalSourceFromFile`, `DeleteExternalSource`, `CreateExternalSourceGroup`, `DeleteExternalSourceGroup`, `ImportExternalSource`, `ImportSourceBlock`, `ImportSourceType`, `ImportSourceBlocks`, `ImportSourceTypes`, `ImportSources` |
 | Type documents (V21+) | `ImportTypeFromDocuments`, `ImportTypesFromDocuments`                                                                                                   |
+| Hardware and network  | `AddDevice`, `ConfigureNode`, `CreateSubnet`, `UpdateSubnet`, `DeleteSubnet` (ANet fork)                                                               |
 
 `GetSoftwareTree` accepts a `sections` argument - any comma separated subset of
 `blocks,types,tags,watch,sources`, default `all` - to keep the output small on a large PLC.

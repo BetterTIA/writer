@@ -1,6 +1,6 @@
 # ANet fork (TIAC_Writer)
 
-Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.1.2`.
+Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.2.0`.
 Local only - nothing is pushed.
 
 The fork adds what renaming objects in a real project needed and upstream did not have. All
@@ -33,6 +33,38 @@ table path now also find tables whose name contains `/` (upstream split the path
 
 `GetProject` no longer fails on projects whose attributes hold Openness objects: attribute values
 that the JSON serializer cannot write are reported as text (`Helper.GetAttributeList`).
+
+## Hardware and network (0.2.2.0)
+
+Carried over from the BetterTIA Reader (its `network_write`, modelled on Czarnak/tia-portal-mcp, MIT),
+so the Writer stays the only tool that changes a project; the Reader keeps the catalog search
+(`search_equipment_catalog`) and the hardware read (`read_hardware_config`). Every tool defaults to
+`dryRun=true` and runs in one transaction, so a refused setting rolls the earlier ones of the same call back.
+
+| Tool                                             | What it does                                                                                      |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `AddDevice`                                      | device from a catalog `typeIdentifier` (`Devices.Create` / `CreateWithItem`); the real run returns the nodes with their `NodeId` |
+| `ConfigureNode`                                  | IP address, subnet mask, PROFINET name, subnet (by `SubnetId`) and IO system (by number) of exactly one node, read back and verified |
+| `CreateSubnet` / `UpdateSubnet` / `DeleteSubnet` | Ethernet and PROFIBUS subnets by `SubnetId`; delete disconnects the nodes and deletes no device   |
+
+Selectors are exact: a device by its station (root) name, a node by the `NodeId` a previous read
+reported, a subnet by its `SubnetId` attribute, an IO system by its number on the connected subnet.
+Zero or several matches fail; nothing falls back to the first match or to a name. A PROFINET name on
+a node that auto-generates it first sets `PnDeviceNameAutoGeneration=false` (the attribute is read-only
+while it is true, seen live upstream). A node already connected to another subnet is disconnected
+before `ConnectToSubnet` (upstream saw "already connected" otherwise).
+
+Fail-safe hardware is told by `Failsafe_*` attributes on a device item (its F-parameters). A node
+whose interface item, or an item above it, carries them is refused, and a created device that carries
+them is deleted again and refused: safety hardware stays with the operator. F-modules elsewhere in the
+station only produce a warning. There is no `allowFailsafe` for hardware.
+
+Verified without TIA Portal: build, the input rules in `HardwareRules` (`Test10Hardware`), tool
+registration. The Openness members used (`Node.ConnectToSubnet` / `DisconnectFromSubnet`,
+`IoConnector.ConnectToIoSystem`, `Devices.CreateWithItem`, `Subnets.Create`, `Subnet.IoSystems`) were
+checked against the V21 assemblies. Not verified against a running TIA Portal: everything else - in
+particular the `PnDeviceNameAutoGeneration` sequence, the `Failsafe_` detection on real modules, and
+whether `Node.Name` and the attributes read back the way the result expects.
 
 ## WinCC Unified (0.2.1.0)
 
