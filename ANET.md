@@ -1,6 +1,6 @@
 # ANet fork (TIAC_Writer)
 
-Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.5.0`.
+Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.5.1`.
 Local only - nothing is pushed.
 
 The fork adds what renaming objects in a real project needed and upstream did not have. All
@@ -75,23 +75,24 @@ whether `AcquisitionCycle` takes `T1s`, and the event text markup.
 
 `ArchiveProject` writes the open project as a compressed zap file (`Project.Archive` with
 `ProjectArchivationMode.Compressed`) into an archive folder outside the project folder;
-`PruneArchives` keeps every full archive and the newest three interim archives of a project and
-deletes the older interim ones. Neither tool schedules itself: the agent or the BetterTIA Editor
+`PruneArchives` keeps the newest full version and the newest three checkpoints of a project and
+deletes every older archive (operator's decision, 2026-10-15). Neither tool schedules itself: the agent or the BetterTIA Editor
 calls them (before the first change of a session, after a series of accepted changes, at the end
 of the day), and the operator confirms the version number - the tool never invents one.
 
-| Name                                      | Kind      | Meaning                                                   |
-| ----------------------------------------- | --------- | --------------------------------------------------------- |
-| `<project>_V1.2.0.zap21`                  | `full`    | a fully working version; the version lives in the archive name only |
-| `<project>_V1.2.0_2026-10-15_1430.zap21`  | `interim` | a checkpoint on the way to that version, date and time appended |
+| Name                                       | Kind      | Meaning                                                            |
+| ------------------------------------------ | --------- | ------------------------------------------------------------------ |
+| `<project>_2026-10-15_1430_V2.3.0.zap21`   | `full`    | patch 0: the tool declared working and tested; the version lives in the archive name only |
+| `<project>_2026-10-15_1430_V2.2.1.zap21`   | `interim` | a checkpoint on the way to the next full version; the patch counts up |
 
-Rules (`ArchiveRules`, covered by `Test12Archive`): the version is `V<major>.<minor>.<patch>`;
+The time comes first, the version last; the kind follows from the patch, so the tool takes the
+version only. Rules (`ArchiveRules`, covered by `Test12Archive`): the version is `V<major>.<minor>.<patch>`;
 an existing file is never overwritten; a project with unsaved changes is refused unless
 `saveFirst=true` (TIA Portal archives the saved state); after the call the file must exist and be
 larger than zero bytes, otherwise the call fails and names the files written in the last minutes.
 `PruneArchives` considers only files whose name matches the pattern exactly and belongs to the
-named project, never deletes a full archive, lists what would go by default, and deletes only with
-`dryRun=false` and `delete=true`; every deletion is in the audit file. Archives of customer
+named project, lists what would go by default, and deletes only with `dryRun=false` and
+`delete=true`; every deletion is in the audit file. Archives of customer
 projects stay on the machine - no path to them belongs into this repository.
 
 Archiving a large project takes minutes; the MCP call returns when TIA Portal has written the
@@ -155,10 +156,12 @@ a node that auto-generates it first sets `PnDeviceNameAutoGeneration=false` (the
 while it is true, seen live upstream). A node already connected to another subnet is disconnected
 before `ConnectToSubnet` (upstream saw "already connected" otherwise).
 
-Fail-safe hardware is told by `Failsafe_*` attributes on a device item (its F-parameters). A node
-whose interface item, or an item above it, carries them is refused, and a created device that carries
-them is deleted again and refused: safety hardware stays with the operator. F-modules elsewhere in the
-station only produce a warning. There is no `allowFailsafe` for hardware.
+Fail-safe hardware is told by `Failsafe_*` attributes on a device item (its F-parameters). On a node
+whose interface item, or an item above it, carries them only the IP address and the subnet mask may be
+set (operator's decision, 2026-10-15: they touch no F-parameter); a PROFINET name, subnet or IO system
+there is refused, and a created device that carries F-parameters is deleted again and refused: safety
+hardware stays with the operator. F-modules elsewhere in the station only produce a warning. There is
+no `allowFailsafe` for hardware.
 
 Verified without TIA Portal: build, the input rules in `HardwareRules` (`Test10Hardware`), tool
 registration. The Openness members used (`Node.ConnectToSubnet` / `DisconnectFromSubnet`,

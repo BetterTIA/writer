@@ -18,7 +18,7 @@ namespace TiaMcpServer.ModelContextProtocol
         /// <summary>'V1.2.3', as confirmed by the operator.</summary>
         public string? Version { get; set; }
 
-        /// <summary>'full' or 'interim'.</summary>
+        /// <summary>'full' (patch 0) or 'interim' (a checkpoint).</summary>
         public string? Kind { get; set; }
 
         /// <summary>The archive file, written or planned.</summary>
@@ -77,17 +77,16 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "ArchiveProject", Title = "Archive project to a zap file", Destructive = false, Idempotent = false, OpenWorld = false, UseStructuredContent = true),
-         Description("Archive the open project as a compressed .zapXX file outside the project folder, named '<project>_V<major>.<minor>.<patch>.zapXX' for a full (last fully working) version or with the date and time appended for an interim one, e.g. '<project>_V1.2.0_2026-10-15_1430.zap21'. The version number is the operator's decision: ask before calling, never invent it. Defaults to a dry run that returns the target path. A project with unsaved changes is refused unless saveFirst is true. Archiving a large project takes minutes. Afterwards PruneArchives removes interim archives beyond the newest three")]
+         Description("Archive the open project as a compressed .zapXX file outside the project folder, named '<project>_<yyyy-MM-dd_HHmm>_V<major>.<minor>.<patch>.zapXX', e.g. 'Line1_2026-10-15_1430_V2.2.1.zap21'. A patch of 0 (V2.3.0) is a full version - the tool declared working and tested; the checkpoints on the way there count the patch up (V2.2.1, V2.2.2, ...). The version number is the operator's decision: ask before calling, never invent it. Defaults to a dry run that returns the target path. A project with unsaved changes is refused unless saveFirst is true. Archiving a large project takes minutes. Afterwards PruneArchives keeps the newest full version and the newest three checkpoints")]
         public static ResponseArchive ArchiveProject(
             [Description("archiveDirectory: absolute path of the archive folder, outside the project folder; created when missing")] string archiveDirectory,
-            [Description("version: V<major>.<minor>.<patch>, e.g. V1.2.0 - confirmed by the operator")] string version,
-            [Description("kind: 'interim' (default, a checkpoint with date and time in the name) or 'full' (a fully working version)")] string kind = "interim",
+            [Description("version: V<major>.<minor>.<patch> - patch 0 for a full version, otherwise a checkpoint; confirmed by the operator")] string version,
             [Description("saveFirst: true saves unsaved changes before the archive; false (default) refuses a modified project")] bool saveFirst = false,
             [Description("dryRun: true (default) only returns the target path; false writes the archive")] bool dryRun = true)
         {
             return Audited(nameof(ArchiveProject), () =>
             {
-                var result = Portal.ArchiveProject(archiveDirectory, version, kind, saveFirst, dryRun);
+                var result = Portal.ArchiveProject(archiveDirectory, version, saveFirst, dryRun);
 
                 return new ResponseArchive
                 {
@@ -102,7 +101,7 @@ namespace TiaMcpServer.ModelContextProtocol
                     Warnings = result.Warnings,
                     Message = result.Applied
                         ? $"Project '{result.ProjectName}' archived to '{result.Path}' ({(result.SizeBytes ?? 0) / 1048576.0:F1} MB)" +
-                          (result.SavedFirst ? ", saved first" : string.Empty) + ". Call PruneArchives to drop interim archives beyond the newest three."
+                          (result.SavedFirst ? ", saved first" : string.Empty) + $" ({result.Kind}). Call PruneArchives to keep only the newest full version and the newest three checkpoints."
                         : $"Dry run: '{result.ProjectName}' would be archived to '{result.Path}'" +
                           (result.SavedFirst ? " after saving its unsaved changes" : string.Empty) + ". Nothing was written; repeat with dryRun=false to archive.",
                     Meta = Ok()
@@ -112,7 +111,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "PruneArchives", Title = "Delete old interim archives", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Keep every full archive and the newest three interim archives of a project in the archive folder and delete the older interim ones. Only files whose name matches the pattern of ArchiveProject exactly are considered; a full archive is never deleted. Defaults to a dry run that lists what would go; a real deletion needs dryRun=false and delete=true, and is recorded in the audit file. Call it only after ArchiveProject confirmed the newest archive")]
+         Description("Keep the newest full version (patch 0) and the newest three checkpoints of a project in the archive folder and delete every older archive. Only files whose name matches the pattern of ArchiveProject exactly are considered. Defaults to a dry run that lists what would go; a real deletion needs dryRun=false and delete=true, and is recorded in the audit file. Call it only after ArchiveProject confirmed the newest archive")]
         public static ResponsePrune PruneArchives(
             [Description("archiveDirectory: absolute path of the archive folder")] string archiveDirectory,
             [Description("projectName: the project whose archives are pruned; empty takes the open project")] string projectName = "",
@@ -136,10 +135,10 @@ namespace TiaMcpServer.ModelContextProtocol
                     Message = result.Deleted.Count == 0
                         ? $"Nothing to delete for '{result.ProjectName}' in '{result.Directory}'; {result.Kept.Count} archive(s) kept."
                         : result.Applied
-                            ? $"Deleted {result.Deleted.Count} interim archive(s) of '{result.ProjectName}': {files}. {result.Kept.Count} archive(s) kept."
+                            ? $"Deleted {result.Deleted.Count} archive(s) of '{result.ProjectName}': {files}. {result.Kept.Count} archive(s) kept."
                             : dryRun
-                                ? $"Dry run: {result.Deleted.Count} interim archive(s) of '{result.ProjectName}' would be deleted: {files}. Nothing was deleted; repeat with dryRun=false and delete=true."
-                                : $"Not deleted: {result.Deleted.Count} interim archive(s) of '{result.ProjectName}' would go ({files}), but delete=true was not given.",
+                                ? $"Dry run: {result.Deleted.Count} archive(s) of '{result.ProjectName}' would be deleted: {files}. Nothing was deleted; repeat with dryRun=false and delete=true."
+                                : $"Not deleted: {result.Deleted.Count} archive(s) of '{result.ProjectName}' would go ({files}), but delete=true was not given.",
                     Meta = Ok()
                 };
             });

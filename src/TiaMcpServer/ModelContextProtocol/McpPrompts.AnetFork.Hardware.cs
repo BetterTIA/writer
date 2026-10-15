@@ -31,7 +31,7 @@ Use the AddDevice tool with these parameters:
         [McpServerPrompt(Name = "ConfigureNode"), Description("Set address, PROFINET name, subnet and IO system of one node")]
         public static string ConfigureNode(string deviceName, string nodeId, string ipAddress = "", string subnetMask = "", string pnDeviceName = "", string subnetId = "", string ioSystemNumber = "0", string dryRun = "true")
         {
-            return $@"Configure exactly one network node of a device: address, subnet mask, PROFINET device name, subnet connection and IO system. Take deviceName and nodeId from a hardware read (the Reader's read_hardware_config) or from AddDevice. Run it with dryRun true first, show the reported settings, then repeat with dryRun false. Fail-safe hardware is refused (requires the server started with '--allow-write').
+            return $@"Configure exactly one network node of a device: address, subnet mask, PROFINET device name, subnet connection and IO system. Take deviceName and nodeId from a hardware read (the Reader's read_hardware_config) or from AddDevice. Run it with dryRun true first, show the reported settings, then repeat with dryRun false. On fail-safe hardware only the IP address and the subnet mask may be set (requires the server started with '--allow-write').
 
 Common parameter values:
 - deviceName: name of the station (root device)

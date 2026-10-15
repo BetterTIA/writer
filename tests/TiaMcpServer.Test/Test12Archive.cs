@@ -30,60 +30,59 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
-        public void Test_1202_NormalizeKind_KnowsFullAndInterim()
+        public void Test_1202_KindOf_PatchZeroIsFull()
         {
-            Assert.AreEqual(ArchiveRules.Full, ArchiveRules.NormalizeKind("FULL"));
-            Assert.AreEqual(ArchiveRules.Interim, ArchiveRules.NormalizeKind("interim"));
-            Assert.ThrowsException<PortalException>(() => ArchiveRules.NormalizeKind("snapshot"));
+            Assert.AreEqual(ArchiveRules.Full, ArchiveRules.KindOf("V2.3.0"));
+            Assert.AreEqual(ArchiveRules.Interim, ArchiveRules.KindOf("V2.2.1"));
+            Assert.AreEqual(ArchiveRules.Interim, ArchiveRules.KindOf("V2.2.10"));
         }
 
         [TestMethod]
-        public void Test_1203_FileName_FollowsTheNamingRule()
+        public void Test_1203_FileName_PutsTheTimeBeforeTheVersion()
         {
             var time = new DateTime(2026, 10, 15, 14, 30, 59);
 
-            Assert.AreEqual("Line1_V1.2.0.zap21", ArchiveRules.FileName("Line1", "V1.2.0", ArchiveRules.Full, time, 21));
-            Assert.AreEqual("Line1_V1.2.0_2026-10-15_1430.zap21", ArchiveRules.FileName("Line1", "V1.2.0", ArchiveRules.Interim, time, 21));
+            Assert.AreEqual("Line1_2026-10-15_1430_V2.3.0.zap21", ArchiveRules.FileName("Line1", "V2.3.0", time, 21));
+            Assert.AreEqual("Line1_2026-10-15_1430_V2.2.1.zap21", ArchiveRules.FileName("Line1", "V2.2.1", time, 21));
         }
 
         [TestMethod]
         public void Test_1204_Parse_RoundTripsBothKinds()
         {
-            var full = ArchiveRules.Parse(@"D:\archives\Line1_V1.2.0.zap21")!;
-            var interim = ArchiveRules.Parse(@"D:\archives\Line_1_V1.2.0_2026-10-15_1430.ZAP21")!;
+            var full = ArchiveRules.Parse(@"D:\archives\Line1_2026-10-15_1430_V2.3.0.zap21")!;
+            var interim = ArchiveRules.Parse(@"D:\archives\Line_1_2026-10-15_1430_V2.2.1.ZAP21")!;
 
             Assert.AreEqual("Line1", full.Project);
-            Assert.AreEqual("V1.2.0", full.Version);
+            Assert.AreEqual("V2.3.0", full.Version);
             Assert.AreEqual(ArchiveRules.Full, full.Kind);
-            Assert.IsNull(full.Time);
+            Assert.AreEqual(new DateTime(2026, 10, 15, 14, 30, 0), full.Time);
 
             Assert.AreEqual("Line_1", interim.Project, "the project name may contain underscores");
             Assert.AreEqual(ArchiveRules.Interim, interim.Kind);
-            Assert.AreEqual(new DateTime(2026, 10, 15, 14, 30, 0), interim.Time);
         }
 
         [TestMethod]
         public void Test_1205_Parse_IgnoresEverythingElse()
         {
-            foreach (var other in new[] { "Line1.zap21", "Line1_V1.2.zap21", "Line1_V1.2.0.zip", "Line1_V1.2.0_2026-13-45_9999.zap21", "Line1_V1.2.0_backup.zap21", "notes.txt" })
+            foreach (var other in new[] { "Line1.zap21", "Line1_V1.2.0.zap21", "Line1_2026-10-15_1430_V1.2.zap21", "Line1_2026-10-15_1430_V1.2.0.zip", "Line1_2026-13-45_9999_V1.2.0.zap21", "Line1_V1.2.0_2026-10-15_1430.zap21", "notes.txt" })
             {
                 Assert.IsNull(ArchiveRules.Parse(other), other);
             }
         }
 
         [TestMethod]
-        public void Test_1206_Plan_KeepsEveryFullAndTheNewestThreeInterim()
+        public void Test_1206_Plan_KeepsTheNewestFullAndTheThreeNewestInterim()
         {
             var files = new[]
             {
-                "Line1_V1.0.0.zap21",
-                "Line1_V1.1.0.zap21",
-                "Line1_V1.2.0_2026-10-13_0900.zap21",
-                "Line1_V1.2.0_2026-10-14_0900.zap21",
-                "Line1_V1.2.0_2026-10-15_0900.zap21",
-                "Line1_V1.2.0_2026-10-15_1430.zap21",
-                "Line1_V1.2.0_2026-10-12_1700.zap21",
-                "Line2_V1.2.0_2026-10-11_0900.zap21",
+                "Line1_2026-10-01_0900_V2.1.0.zap21",
+                "Line1_2026-10-10_0900_V2.2.0.zap21",
+                "Line1_2026-10-12_1700_V2.2.1.zap21",
+                "Line1_2026-10-13_0900_V2.2.2.zap21",
+                "Line1_2026-10-14_0900_V2.2.3.zap21",
+                "Line1_2026-10-15_0900_V2.2.4.zap21",
+                "Line1_2026-10-15_1430_V2.2.5.zap21",
+                "Line2_2026-10-11_0900_V2.2.1.zap21",
                 "Line1_V1.2.0_backup.zap21",
                 "readme.txt"
             };
@@ -91,20 +90,20 @@ namespace TiaMcpServer.Test
             var (keep, delete) = ArchiveRules.Plan(files, "line1");
 
             CollectionAssert.AreEquivalent(
-                new[] { "Line1_V1.0.0.zap21", "Line1_V1.1.0.zap21", "Line1_V1.2.0_2026-10-15_1430.zap21", "Line1_V1.2.0_2026-10-15_0900.zap21", "Line1_V1.2.0_2026-10-14_0900.zap21" },
+                new[] { "Line1_2026-10-10_0900_V2.2.0.zap21", "Line1_2026-10-15_1430_V2.2.5.zap21", "Line1_2026-10-15_0900_V2.2.4.zap21", "Line1_2026-10-14_0900_V2.2.3.zap21" },
                 keep.Select(a => a.Path).ToArray());
-            CollectionAssert.AreEqual(
-                new[] { "Line1_V1.2.0_2026-10-13_0900.zap21", "Line1_V1.2.0_2026-10-12_1700.zap21" },
+            CollectionAssert.AreEquivalent(
+                new[] { "Line1_2026-10-01_0900_V2.1.0.zap21", "Line1_2026-10-13_0900_V2.2.2.zap21", "Line1_2026-10-12_1700_V2.2.1.zap21" },
                 delete.Select(a => a.Path).ToArray(),
-                "older interim archives, oldest last; another project and unmatched names are never listed");
+                "the older full version and the older interim archives; another project and unmatched names are never listed");
         }
 
         [TestMethod]
-        public void Test_1207_Plan_WithThreeOrFewerInterim_DeletesNothing()
+        public void Test_1207_Plan_WithLittleToPrune_DeletesNothing()
         {
-            var (keep, delete) = ArchiveRules.Plan(new[] { "Line1_V1.2.0_2026-10-13_0900.zap21", "Line1_V1.2.0_2026-10-14_0900.zap21" }, "Line1");
+            var (keep, delete) = ArchiveRules.Plan(new[] { "Line1_2026-10-13_0900_V2.2.1.zap21", "Line1_2026-10-14_0900_V2.2.2.zap21", "Line1_2026-10-10_0900_V2.2.0.zap21" }, "Line1");
 
-            Assert.AreEqual(2, keep.Count);
+            Assert.AreEqual(3, keep.Count);
             Assert.AreEqual(0, delete.Count);
         }
     }

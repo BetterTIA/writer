@@ -11,9 +11,10 @@
 
 ### Added (ANet fork, 0.2.4.0)
 
-- __Project archives__: `ArchiveProject` (compressed zap file named `<project>_V<x.y.z>.zapXX`, or
-  with date and time for an interim checkpoint; the operator confirms the version) and
-  `PruneArchives` (keeps every full archive and the newest three interim ones) - see ANET.md.
+- __Project archives__: `ArchiveProject` (compressed zap file named
+  `<project>_<yyyy-MM-dd_HHmm>_V<x.y.z>.zapXX`; patch 0 is a full version, otherwise a checkpoint; the
+  operator confirms the version) and `PruneArchives` (keeps the newest full version and the newest
+  three checkpoints) - see ANET.md.
 
 ### Added (ANet fork, 0.2.3.0)
 
@@ -32,7 +33,8 @@
 - __Hardware and network writes__: `AddDevice` (device from a catalog type identifier), `ConfigureNode`
   (IP address, subnet mask, PROFINET name, subnet and IO system of exactly one node, read back and
   verified), `CreateSubnet`, `UpdateSubnet`, `DeleteSubnet`. Exact selectors (`NodeId`, `SubnetId`,
-  IO system number), `dryRun` by default, fail-safe hardware refused - see ANET.md.
+  IO system number), `dryRun` by default; on fail-safe hardware only the IP address and the subnet
+  mask may be set - see ANET.md.
 
 ### Added (ANet fork, branch `anet`, 0.2.0.1)
 

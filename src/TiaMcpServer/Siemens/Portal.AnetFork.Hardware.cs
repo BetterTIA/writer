@@ -420,11 +420,18 @@ namespace TiaMcpServer.Siemens
                     var owners = OwnerChain(item);
                     var failsafeOwners = owners.Where(HasFailsafeAttributes).Select(o => o.Name).ToList();
 
-                    if (failsafeOwners.Count > 0)
+                    // Decided by the operator (2026-10-15): on fail-safe hardware the IP address and the subnet mask
+                    // may change (they touch no F-parameter); the PROFINET name, the subnet and the IO system stay manual.
+                    if (failsafeOwners.Count > 0 && (!string.IsNullOrWhiteSpace(pnDeviceName) || !string.IsNullOrWhiteSpace(subnetId) || ioSystemNumber != 0))
                     {
                         throw new PortalException(PortalErrorCode.NotSupported,
                             $"Node '{nodeId}' of '{deviceName}' belongs to fail-safe hardware ({string.Join(", ", failsafeOwners)} carry F-parameters). " +
-                            "Network settings of safety hardware stay with the operator; nothing was changed.");
+                            "Only the IP address and the subnet mask may be set there; the PROFINET name, the subnet and the IO system stay with the operator. Nothing was changed.");
+                    }
+
+                    if (failsafeOwners.Count > 0)
+                    {
+                        result.Warnings.Add($"Fail-safe hardware ({string.Join(", ", failsafeOwners)}): only the IP address and the subnet mask are set; F-parameters are not touched.");
                     }
 
                     var otherFailsafe = FailsafeItems(device).Except(owners.Select(o => o.Name)).ToList();

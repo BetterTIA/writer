@@ -11,29 +11,27 @@ namespace TiaMcpServer.ModelContextProtocol
         #region ANet fork archive templates
 
         [McpServerPrompt(Name = "ArchiveProject"), Description("Archive the project as a versioned zap file")]
-        public static string ArchiveProject(string archiveDirectory, string version, string kind = "interim", string saveFirst = "false", string dryRun = "true")
+        public static string ArchiveProject(string archiveDirectory, string version, string saveFirst = "false", string dryRun = "true")
         {
             return $@"Archive the open project as a compressed zap file outside the project folder. Ask the operator for the version number first; never invent it. Run it with dryRun true to see the target path, then repeat with dryRun false (requires the server started with '--allow-write').
 
 Common parameter values:
 - archiveDirectory: absolute path of the archive folder, outside the project folder
-- version: V<major>.<minor>.<patch>, e.g. V1.2.0, confirmed by the operator
-- kind: interim (checkpoint with date and time in the name) or full (fully working version)
+- version: V<major>.<minor>.<patch>, confirmed by the operator; patch 0 (V2.3.0) is a full version, V2.2.1 a checkpoint
 - saveFirst: true saves unsaved changes before the archive
 - dryRun: true only returns the target path, false writes the archive
 
 Use the ArchiveProject tool with these parameters:
 - archiveDirectory: {archiveDirectory}
 - version: {version}
-- kind: {kind}
 - saveFirst: {saveFirst}
 - dryRun: {dryRun}";
         }
 
-        [McpServerPrompt(Name = "PruneArchives"), Description("Delete interim archives beyond the newest three")]
+        [McpServerPrompt(Name = "PruneArchives"), Description("Keep the newest full version and three checkpoints")]
         public static string PruneArchives(string archiveDirectory, string projectName = "", string dryRun = "true", string delete = "false")
         {
-            return $@"Keep every full archive and the newest three interim archives of the project, delete the older interim ones. Run it with dryRun true first and show the list; a real deletion needs dryRun false and delete true (requires the server started with '--allow-write').
+            return $@"Keep the newest full version (patch 0) and the newest three checkpoints of the project, delete every older archive. Run it with dryRun true first and show the list; a real deletion needs dryRun false and delete true (requires the server started with '--allow-write').
 
 Common parameter values:
 - archiveDirectory: absolute path of the archive folder

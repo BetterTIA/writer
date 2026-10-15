@@ -58,8 +58,9 @@ namespace TiaMcpServer.Siemens
 
         #region archive
 
+        /// <param name="version">'V2.2.1' for a checkpoint (interim), 'V2.3.0' for a full version - the operator decides.</param>
         /// <param name="saveFirst">Save unsaved changes before archiving; without it a modified project is refused.</param>
-        public ArchiveResult ArchiveProject(string archiveDirectory, string version, string kind, bool saveFirst, bool dryRun = true)
+        public ArchiveResult ArchiveProject(string archiveDirectory, string version, bool saveFirst, bool dryRun = true)
         {
             return Operation.Run(_logger, nameof(ArchiveProject), PortalErrorCode.ExportFailed,
                 () =>
@@ -69,7 +70,7 @@ namespace TiaMcpServer.Siemens
                             "No local project is open in TIA Portal (a multiuser session cannot be archived by this tool).");
 
                     var normalizedVersion = ArchiveRules.NormalizeVersion(version);
-                    var normalizedKind = ArchiveRules.NormalizeKind(kind);
+                    var normalizedKind = ArchiveRules.KindOf(normalizedVersion);
 
                     if (string.IsNullOrWhiteSpace(archiveDirectory) || !Path.IsPathRooted(archiveDirectory))
                     {
@@ -88,7 +89,7 @@ namespace TiaMcpServer.Siemens
                     }
 
                     var projectName = project.Name;
-                    var fileName = ArchiveRules.FileName(projectName, normalizedVersion, normalizedKind, DateTime.Now, Engineering.TiaMajorVersion);
+                    var fileName = ArchiveRules.FileName(projectName, normalizedVersion, DateTime.Now, Engineering.TiaMajorVersion);
                     var target = Path.Combine(directory, fileName);
                     var modified = Safe(() => project.IsModified);
 
@@ -104,8 +105,7 @@ namespace TiaMcpServer.Siemens
                     if (File.Exists(target))
                     {
                         throw new PortalException(PortalErrorCode.InvalidParams,
-                            $"'{target}' already exists. A version is archived once; choose the next version number" +
-                            (normalizedKind == ArchiveRules.Interim ? " or wait a minute for a new time stamp." : "."));
+                            $"'{target}' already exists; wait a minute for a new time stamp or choose the next version number.");
                     }
 
                     if (modified && !saveFirst)
@@ -145,7 +145,7 @@ namespace TiaMcpServer.Siemens
 
                     return result;
                 },
-                ("archiveDirectory", archiveDirectory), ("version", version), ("kind", kind), ("dryRun", dryRun));
+                ("archiveDirectory", archiveDirectory), ("version", version), ("dryRun", dryRun));
         }
 
         /// <param name="projectName">Empty takes the name of the open project.</param>
@@ -181,7 +181,7 @@ namespace TiaMcpServer.Siemens
 
                     if (!keep.Any(a => a.Kind == ArchiveRules.Full))
                     {
-                        result.Warnings.Add($"No full archive of '{name}' is in the directory; only interim archives would remain.");
+                        result.Warnings.Add($"No full archive (patch 0) of '{name}' is in the directory; only interim archives would remain.");
                     }
 
                     if (!delete || remove.Count == 0)

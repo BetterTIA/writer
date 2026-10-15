@@ -11,11 +11,12 @@ namespace TiaMcpServer.Siemens
     /// Naming and retention of project archives (ArchiveProject, PruneArchives), kept pure so
     /// Test12Archive covers them without TIA Portal.
     ///
-    /// A full archive is '&lt;project&gt;_V&lt;major&gt;.&lt;minor&gt;.&lt;patch&gt;.zap&lt;tia&gt;' - the
-    /// version lives in the archive name only, the project itself carries none. An interim
-    /// archive adds the time it was taken: '&lt;project&gt;_V1.2.0_2026-10-15_1430.zap21', the
-    /// version being the one the work is heading for. Pruning keeps every full archive and the
-    /// newest interim ones; only interim archives whose name matches this pattern exactly are
+    /// An archive is '&lt;project&gt;_&lt;yyyy-MM-dd_HHmm&gt;_V&lt;major&gt;.&lt;minor&gt;.&lt;patch&gt;.zap&lt;tia&gt;':
+    /// the time it was taken, then the version at the end. The version lives in the archive name
+    /// only, the project carries none. A patch of 0 ('V2.3.0') marks a full version - the tool
+    /// declared working and tested; every checkpoint on the way there counts the patch up
+    /// ('V2.2.1', 'V2.2.2', ...) and is an interim archive. Pruning keeps the newest full archive
+    /// and the three newest interim ones; only files whose name matches this pattern exactly are
     /// ever deleted.
     /// </summary>
     public static class ArchiveRules
@@ -32,7 +33,7 @@ namespace TiaMcpServer.Siemens
         private static readonly Regex VersionShape = new Regex(@"^[Vv]?(\d+)\.(\d+)\.(\d+)$", RegexOptions.Compiled);
 
         private static readonly Regex FileShape = new Regex(
-            @"^(?<project>.+)_V(?<version>\d+\.\d+\.\d+)(?:_(?<time>\d{4}-\d{2}-\d{2}_\d{4}))?\.zap\d+$",
+            @"^(?<project>.+)_(?<time>\d{4}-\d{2}-\d{2}_\d{4})_V(?<version>\d+\.\d+\.\d+)\.zap\d+$",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         public sealed class ArchiveFile
@@ -44,10 +45,11 @@ namespace TiaMcpServer.Siemens
             /// <summary>'V1.2.3'.</summary>
             public string Version { get; set; } = string.Empty;
 
+            /// <summary>'full' when the patch is 0, otherwise 'interim'.</summary>
             public string Kind { get; set; } = Full;
 
-            /// <summary>When an interim archive was taken, from its name; null for a full archive.</summary>
-            public DateTime? Time { get; set; }
+            /// <summary>When the archive was taken, from its name.</summary>
+            public DateTime Time { get; set; }
 
             internal int[] VersionKey { get; set; } = new int[3];
         }
@@ -60,73 +62,52 @@ namespace TiaMcpServer.Siemens
             if (!match.Success)
             {
                 throw new PortalException(PortalErrorCode.InvalidParams,
-                    $"'{version}' is not a version. Write it as V<major>.<minor>.<patch>, e.g. V1.2.0; the operator confirms the number.");
+                    $"'{version}' is not a version. Write it as V<major>.<minor>.<patch>, e.g. V2.2.1 for a checkpoint or V2.3.0 for a full version; the operator confirms the number.");
             }
 
             return $"V{match.Groups[1].Value}.{match.Groups[2].Value}.{match.Groups[3].Value}";
         }
 
-        public static string NormalizeKind(string? kind)
-        {
-            if (string.Equals(kind, Full, StringComparison.OrdinalIgnoreCase))
-            {
-                return Full;
-            }
-
-            if (string.Equals(kind, Interim, StringComparison.OrdinalIgnoreCase))
-            {
-                return Interim;
-            }
-
-            throw new PortalException(PortalErrorCode.InvalidParams, $"Unknown archive kind '{kind}'. Use 'full' or 'interim'.");
-        }
+        /// <summary>'full' for a patch of 0, 'interim' otherwise.</summary>
+        /// <param name="version">Already normalized ('V1.2.3').</param>
+        public static string KindOf(string version) => version.EndsWith(".0", StringComparison.Ordinal) ? Full : Interim;
 
         /// <param name="version">Already normalized ('V1.2.3').</param>
-        /// <param name="kind">Already normalized.</param>
-        public static string FileName(string projectName, string version, string kind, DateTime time, int tiaMajorVersion)
-        {
-            var stamp = kind == Interim ? "_" + time.ToString(TimestampFormat, CultureInfo.InvariantCulture) : string.Empty;
-
-            return $"{projectName}_{version}{stamp}.zap{tiaMajorVersion}";
-        }
+        public static string FileName(string projectName, string version, DateTime time, int tiaMajorVersion) =>
+            $"{projectName}_{time.ToString(TimestampFormat, CultureInfo.InvariantCulture)}_{version}.zap{tiaMajorVersion}";
 
         /// <summary>The archive a path names, or null when the file name does not match the pattern exactly.</summary>
         public static ArchiveFile? Parse(string path)
         {
             var match = FileShape.Match(Path.GetFileName(path));
 
-            if (!match.Success)
+            if (!match.Success
+                || !DateTime.TryParseExact(match.Groups["time"].Value, TimestampFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var time))
             {
                 return null;
             }
 
-            var file = new ArchiveFile
+            var version = "V" + match.Groups["version"].Value;
+
+            return new ArchiveFile
             {
                 Path = path,
                 Project = match.Groups["project"].Value,
-                Version = "V" + match.Groups["version"].Value,
+                Version = version,
+                Kind = KindOf(version),
+                Time = time,
                 VersionKey = match.Groups["version"].Value.Split('.').Select(int.Parse).ToArray()
             };
-
-            if (match.Groups["time"].Success)
-            {
-                if (!DateTime.TryParseExact(match.Groups["time"].Value, TimestampFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var time))
-                {
-                    return null;
-                }
-
-                file.Kind = Interim;
-                file.Time = time;
-            }
-
-            return file;
         }
 
+        private static IOrderedEnumerable<ArchiveFile> NewestFirst(IEnumerable<ArchiveFile> archives) =>
+            archives.OrderByDescending(a => a.VersionKey[0]).ThenByDescending(a => a.VersionKey[1]).ThenByDescending(a => a.VersionKey[2]).ThenByDescending(a => a.Time);
+
         /// <summary>
-        /// Splits the archives of one project into the ones to keep and the ones to delete:
-        /// every full archive stays, the newest <see cref="InterimToKeep"/> interim archives
-        /// stay, older interim archives go. Files of other projects or of another shape are
-        /// not returned at all, so they can never be deleted.
+        /// Splits the archives of one project into the ones to keep and the ones to delete: the
+        /// newest full archive stays, the <see cref="InterimToKeep"/> newest interim archives
+        /// stay, everything older goes. Files of other projects or of another shape are not
+        /// returned at all, so they can never be deleted.
         /// </summary>
         public static (List<ArchiveFile> Keep, List<ArchiveFile> Delete) Plan(IEnumerable<string> paths, string projectName)
         {
@@ -136,16 +117,13 @@ namespace TiaMcpServer.Siemens
                 .Select(a => a!)
                 .ToList();
 
-            var keep = archives.Where(a => a.Kind == Full).ToList();
-            var interim = archives
-                .Where(a => a.Kind == Interim)
-                .OrderByDescending(a => a.Time)
-                .ThenByDescending(a => a.VersionKey[0]).ThenByDescending(a => a.VersionKey[1]).ThenByDescending(a => a.VersionKey[2])
-                .ToList();
+            var full = NewestFirst(archives.Where(a => a.Kind == Full)).ToList();
+            var interim = NewestFirst(archives.Where(a => a.Kind == Interim)).ToList();
 
-            keep.AddRange(interim.Take(InterimToKeep));
+            var keep = full.Take(1).Concat(interim.Take(InterimToKeep)).ToList();
+            var delete = full.Skip(1).Concat(interim.Skip(InterimToKeep)).ToList();
 
-            return (keep, interim.Skip(InterimToKeep).ToList());
+            return (keep, delete);
         }
     }
 }
