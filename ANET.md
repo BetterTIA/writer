@@ -1,6 +1,6 @@
 # ANet fork (TIAC_Writer)
 
-Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.3.0`.
+Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.4.0`.
 Local only - nothing is pushed.
 
 The fork adds what renaming objects in a real project needed and upstream did not have. All
@@ -33,6 +33,34 @@ table path now also find tables whose name contains `/` (upstream split the path
 
 `GetProject` no longer fails on projects whose attributes hold Openness objects: attribute values
 that the JSON serializer cannot write are reported as text (`Helper.GetAttributeList`).
+
+## Project archives (0.2.4.0)
+
+`ArchiveProject` writes the open project as a compressed zap file (`Project.Archive` with
+`ProjectArchivationMode.Compressed`) into an archive folder outside the project folder;
+`PruneArchives` keeps every full archive and the newest three interim archives of a project and
+deletes the older interim ones. Neither tool schedules itself: the agent or the BetterTIA Editor
+calls them (before the first change of a session, after a series of accepted changes, at the end
+of the day), and the operator confirms the version number - the tool never invents one.
+
+| Name                                      | Kind      | Meaning                                                   |
+| ----------------------------------------- | --------- | --------------------------------------------------------- |
+| `<project>_V1.2.0.zap21`                  | `full`    | a fully working version; the version lives in the archive name only |
+| `<project>_V1.2.0_2026-10-15_1430.zap21`  | `interim` | a checkpoint on the way to that version, date and time appended |
+
+Rules (`ArchiveRules`, covered by `Test12Archive`): the version is `V<major>.<minor>.<patch>`;
+an existing file is never overwritten; a project with unsaved changes is refused unless
+`saveFirst=true` (TIA Portal archives the saved state); after the call the file must exist and be
+larger than zero bytes, otherwise the call fails and names the files written in the last minutes.
+`PruneArchives` considers only files whose name matches the pattern exactly and belongs to the
+named project, never deletes a full archive, lists what would go by default, and deletes only with
+`dryRun=false` and `delete=true`; every deletion is in the audit file. Archives of customer
+projects stay on the machine - no path to them belongs into this repository.
+
+Archiving a large project takes minutes; the MCP call returns when TIA Portal has written the
+file (a client that backgrounds long calls still gets the result). Not verified against a running
+TIA Portal: whether `Archive` accepts the file name with its extension, as the Openness
+documentation shows, and whether a modified project is refused by TIA Portal itself.
 
 ## Write safeguards (0.2.3.0)
 

@@ -64,11 +64,11 @@ Read-only tools (62) are always available.
 | Type documents (V21+)         | `ExportTypeAsDocuments`, `ExportTypesAsDocuments`                                                                                                                                                      |
 | Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockSource`, `GetTypeSource`, `GetBlockInterface`, `PreviewImport`, `OpenTiaProject`, `ExportPlcAsDocuments`, `ExportSources` |
 
-Write tools (67) require `--allow-write`. Seventeen of them are additions of the ANet fork (`RenameBlockGroup`,
+Write tools (69) require `--allow-write`. Nineteen of them are additions of the ANet fork (`RenameBlockGroup`,
 `RenameTypeGroup`, `RenameTagTableGroup`, `RenameWatchTableGroup`, `RenameTechnologicalObject`,
 `RenameTags`, `RenameObjects`, `SetTagComment`, `ReplaceTagComments`, `SetNetworkText`,
 `ReplaceNetworkText`, `RenameMembers`, `AddDevice`, `ConfigureNode`, `CreateSubnet`, `UpdateSubnet`,
-`DeleteSubnet`), as is the read-side `CompileBlock` - see [ANET.md](ANET.md).
+`DeleteSubnet`, `ArchiveProject`, `PruneArchives`), as is the read-side `CompileBlock` - see [ANET.md](ANET.md).
 
 | Area                  | Tools                                                                                                                                                   |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -81,6 +81,7 @@ Write tools (67) require `--allow-write`. Seventeen of them are additions of the
 | External sources      | `CreateExternalSourceFromFile`, `DeleteExternalSource`, `CreateExternalSourceGroup`, `DeleteExternalSourceGroup`, `ImportExternalSource`, `ImportSourceBlock`, `ImportSourceType`, `ImportSourceBlocks`, `ImportSourceTypes`, `ImportSources` |
 | Type documents (V21+) | `ImportTypeFromDocuments`, `ImportTypesFromDocuments`                                                                                                   |
 | Hardware and network  | `AddDevice`, `ConfigureNode`, `CreateSubnet`, `UpdateSubnet`, `DeleteSubnet` (ANet fork)                                                               |
+| Project archives      | `ArchiveProject`, `PruneArchives` (ANet fork)                                                                                                           |
 
 `GetSoftwareTree` accepts a `sections` argument - any comma separated subset of
 `blocks,types,tags,watch,sources`, default `all` - to keep the output small on a large PLC.

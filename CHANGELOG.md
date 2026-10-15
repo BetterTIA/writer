@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added (ANet fork, 0.2.4.0)
+
+- __Project archives__: `ArchiveProject` (compressed zap file named `<project>_V<x.y.z>.zapXX`, or
+  with date and time for an interim checkpoint; the operator confirms the version) and
+  `PruneArchives` (keeps every full archive and the newest three interim ones) - see ANET.md.
+
 ### Added (ANet fork, 0.2.3.0)
 
 - __Name collisions checked right before the write__ against every symbol of the CPU (tags,
