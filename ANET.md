@@ -1,6 +1,6 @@
 # ANet fork (TIAC_Writer)
 
-Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.4.0`.
+Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.5.0`.
 Local only - nothing is pushed.
 
 The fork adds what renaming objects in a real project needed and upstream did not have. All
@@ -33,6 +33,43 @@ table path now also find tables whose name contains `/` (upstream split the path
 
 `GetProject` no longer fails on projects whose attributes hold Openness objects: attribute values
 that the JSON serializer cannot write are reported as text (`Helper.GetAttributeList`).
+
+## WinCC Unified tag tables, tags and alarms (0.2.5.0)
+
+Creating, changing and deleting, next to the rename, binding and dynamization tools of 0.2.1.x.
+Modelled on the `hmi_write` of Czarnak/tia-portal-mcp (MIT) and its live findings of 2026-10-14.
+`softwarePath` names the HMI software; every tool defaults to `dryRun=true`.
+
+| Tool                                                           | What it does                                                                                   |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `CreateHmiTagTable` / `RenameHmiTagTable` / `DeleteHmiTagTable` | tag tables at the root or in a group; delete names the tags that go with the table            |
+| `CreateHmiTags`                                                | batch: `name=plcPath` bound to the PLC (data type derived), `name:dataType` internal            |
+| `UpdateHmiTag`                                                 | connection, PLC path, data type (internal), acquisition cycle of one tag                       |
+| `DeleteHmiTags`                                                | batch; the dry run lists the dynamizations, script lines and alarms that use each tag          |
+| `CreateHmiAlarms`                                              | batch of discrete (`name|triggerTag|bitNumber|eventText`) or analog (`name|triggerTag|condition|value|eventText`) alarms |
+| `UpdateHmiAlarm`                                               | name, trigger, bit or condition and value, class, priority, event and info text of one alarm   |
+| `DeleteHmiAlarms`                                              | batch                                                                                          |
+
+Batches fail closed per item (`Items`, each with `Ok`, `Message`, `Details`): a tag whose name
+is taken or whose PLC path does not start at a tag or block of `plcSoftwarePath` (required for
+bound tags), an alarm whose trigger tag does not exist, are reported and skipped; the others go
+through. A tag whose PLC path TIA Portal does not accept (`PlcTag` reads back empty) and an alarm
+TIA Portal does not accept are deleted again. A batch where no item can go through fails as a
+whole. Bound tags take the only connection of the device, or the one named in `connection`;
+binding never creates a connection. Event texts are written as TIA Portal stores them
+(`<body><p>...</p></body>`, escaped), info texts as given; with several project languages pass
+`culture`. The batch separators `;` and `|` cannot appear inside a name or text.
+
+Not available: indirect addressing (Openness V21 exposes no index tag on `HmiTag`, only
+`DBNameMultiplexing`), comments and display names of tags, the second to ninth event text.
+
+Verified without TIA Portal: the parsing in `HmiSpecs` (`Test13HmiSpecs`), build, registration;
+the Openness members used (`Tags.Create(name, table)`, `DiscreteAlarms.Create`,
+`RaisedStateTag`, `RaisedStateTagBitNumber`, `Condition`, `ConditionValue`, `AlarmClass`,
+`Priority`, `EventText.Items`) were checked against the V21 assemblies. Not verified against a
+running TIA Portal: everything else - whether a tag created by `Tags.Create(name, table)` lands
+in that table, the notation `PlcTag` wants (seen live for `SetHmiTagPlcTags`: `"DB".member`),
+whether `AcquisitionCycle` takes `T1s`, and the event text markup.
 
 ## Project archives (0.2.4.0)
 

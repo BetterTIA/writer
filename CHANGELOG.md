@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added (ANet fork, 0.2.5.0)
+
+- __WinCC Unified tag tables, tags and alarms__: `CreateHmiTagTable`, `RenameHmiTagTable`,
+  `DeleteHmiTagTable`, `CreateHmiTags` (batch, bound or internal), `UpdateHmiTag`,
+  `DeleteHmiTags`, `CreateHmiAlarms` (batch, discrete or analog), `UpdateHmiAlarm`,
+  `DeleteHmiAlarms`. Fail closed per item, `dryRun` by default - see ANET.md.
+
 ### Added (ANet fork, 0.2.4.0)
 
 - __Project archives__: `ArchiveProject` (compressed zap file named `<project>_V<x.y.z>.zapXX`, or
