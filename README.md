@@ -64,11 +64,9 @@ Read-only tools (62) are always available.
 | Type documents (V21+)         | `ExportTypeAsDocuments`, `ExportTypesAsDocuments`                                                                                                                                                      |
 | Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockSource`, `GetTypeSource`, `GetBlockInterface`, `PreviewImport`, `OpenTiaProject`, `ExportPlcAsDocuments`, `ExportSources` |
 
-Write tools (78) require `--allow-write`. Twenty-eight of them are additions of the ANet fork (`RenameBlockGroup`,
-`RenameTypeGroup`, `RenameTagTableGroup`, `RenameWatchTableGroup`, `RenameTechnologicalObject`,
-`RenameTags`, `RenameObjects`, `SetTagComment`, `ReplaceTagComments`, `SetNetworkText`,
-`ReplaceNetworkText`, `RenameMembers`, `AddDevice`, `ConfigureNode`, `CreateSubnet`, `UpdateSubnet`,
-`DeleteSubnet`, `ArchiveProject`, `PruneArchives`, and the WinCC Unified tag table, tag and alarm tools), as is the
+Write tools (79) require `--allow-write`. Thirty-five of them are additions of the ANet fork: the batch and
+group renames, tag comments, network texts and member rename, the WinCC Unified tools (binding, renames,
+scripts, tag tables, tags, alarms), the hardware and network tools and the project archives, as is the
 read-side `CompileBlock` - see [ANET.md](ANET.md).
 
 | Area                  | Tools                                                                                                                                                   |
