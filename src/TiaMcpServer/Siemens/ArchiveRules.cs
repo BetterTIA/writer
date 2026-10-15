@@ -16,8 +16,8 @@ namespace TiaMcpServer.Siemens
     /// only, the project carries none. A patch of 0 ('V2.3.0') marks a full version - the tool
     /// declared working and tested; every checkpoint on the way there counts the patch up
     /// ('V2.2.1', 'V2.2.2', ...) and is an interim archive. Pruning keeps the newest full archive
-    /// and the three newest interim ones; only files whose name matches this pattern exactly are
-    /// ever deleted.
+    /// and the three newest interim ones, newest by the time in the name; only files whose name
+    /// matches this pattern exactly are ever deleted.
     /// </summary>
     public static class ArchiveRules
     {
@@ -52,6 +52,16 @@ namespace TiaMcpServer.Siemens
             public DateTime Time { get; set; }
 
             internal int[] VersionKey { get; set; } = new int[3];
+        }
+
+        public sealed class PrunePlan
+        {
+            public List<ArchiveFile> Keep { get; set; } = new List<ArchiveFile>();
+
+            public List<ArchiveFile> Delete { get; set; } = new List<ArchiveFile>();
+
+            /// <summary>Archives that are older by time but higher by version than a kept one: kept as well, and named here.</summary>
+            public List<string> Warnings { get; set; } = new List<string>();
         }
 
         /// <summary>'1.2.3' or 'V1.2.3' to 'V1.2.3'; anything else is refused - the number is the operator's decision, never guessed.</summary>
@@ -100,16 +110,42 @@ namespace TiaMcpServer.Siemens
             };
         }
 
-        private static IOrderedEnumerable<ArchiveFile> NewestFirst(IEnumerable<ArchiveFile> archives) =>
-            archives.OrderByDescending(a => a.VersionKey[0]).ThenByDescending(a => a.VersionKey[1]).ThenByDescending(a => a.VersionKey[2]).ThenByDescending(a => a.Time);
+        private static int CompareVersion(ArchiveFile a, ArchiveFile b)
+        {
+            for (var i = 0; i < 3; i++)
+            {
+                var c = a.VersionKey[i].CompareTo(b.VersionKey[i]);
+
+                if (c != 0)
+                {
+                    return c;
+                }
+            }
+
+            return 0;
+        }
+
+        /// <summary>Newest by the time in the name first; the version only breaks a tie.</summary>
+        private static List<ArchiveFile> NewestFirst(IEnumerable<ArchiveFile> archives)
+        {
+            var list = archives.ToList();
+
+            list.Sort((a, b) => b.Time != a.Time ? b.Time.CompareTo(a.Time) : CompareVersion(b, a));
+
+            return list;
+        }
 
         /// <summary>
         /// Splits the archives of one project into the ones to keep and the ones to delete: the
         /// newest full archive stays, the <see cref="InterimToKeep"/> newest interim archives
-        /// stay, everything older goes. Files of other projects or of another shape are not
-        /// returned at all, so they can never be deleted.
+        /// stay, everything older goes - newest by the time in the name, so a later archive
+        /// with a lower version number is never deleted in favour of an earlier one. An archive
+        /// that would go although its version is higher than a kept one of its kind is kept as
+        /// well and reported, because time and version disagree and the operator has to look.
+        /// Files of other projects or of another shape are not returned at all, so they can never
+        /// be deleted.
         /// </summary>
-        public static (List<ArchiveFile> Keep, List<ArchiveFile> Delete) Plan(IEnumerable<string> paths, string projectName)
+        public static PrunePlan Plan(IEnumerable<string> paths, string projectName)
         {
             var archives = paths
                 .Select(Parse)
@@ -117,13 +153,30 @@ namespace TiaMcpServer.Siemens
                 .Select(a => a!)
                 .ToList();
 
-            var full = NewestFirst(archives.Where(a => a.Kind == Full)).ToList();
-            var interim = NewestFirst(archives.Where(a => a.Kind == Interim)).ToList();
+            var full = NewestFirst(archives.Where(a => a.Kind == Full));
+            var interim = NewestFirst(archives.Where(a => a.Kind == Interim));
 
-            var keep = full.Take(1).Concat(interim.Take(InterimToKeep)).ToList();
-            var delete = full.Skip(1).Concat(interim.Skip(InterimToKeep)).ToList();
+            var plan = new PrunePlan();
+            plan.Keep.AddRange(full.Take(1));
+            plan.Keep.AddRange(interim.Take(InterimToKeep));
 
-            return (keep, delete);
+            foreach (var candidate in full.Skip(1).Concat(interim.Skip(InterimToKeep)))
+            {
+                var kept = plan.Keep.Where(k => k.Kind == candidate.Kind).ToList();
+
+                if (kept.Any(k => CompareVersion(candidate, k) > 0))
+                {
+                    plan.Keep.Add(candidate);
+                    plan.Warnings.Add(
+                        $"'{Path.GetFileName(candidate.Path)}' is older by time than the kept {candidate.Kind} archive(s) but has a higher version; kept, not deleted - check which one is the real newer state.");
+                }
+                else
+                {
+                    plan.Delete.Add(candidate);
+                }
+            }
+
+            return plan;
         }
     }
 }

@@ -110,8 +110,8 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [WriteTool]
-        [McpServerTool(Name = "PruneArchives", Title = "Delete old interim archives", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Keep the newest full version (patch 0) and the newest three checkpoints of a project in the archive folder and delete every older archive. Only files whose name matches the pattern of ArchiveProject exactly are considered. Defaults to a dry run that lists what would go; a real deletion needs dryRun=false and delete=true, and is recorded in the audit file. Call it only after ArchiveProject confirmed the newest archive")]
+        [McpServerTool(Name = "PruneArchives", Title = "Delete old project archives", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
+         Description("Keep the newest full version (patch 0) and the newest three checkpoints of a project in the archive folder and delete every older archive, newest by the time in the name. An archive that is older by time but higher by version than a kept one is kept too and reported, because time and version disagree. Only files whose name matches the pattern of ArchiveProject exactly are considered. Defaults to a dry run that lists what would go; a real deletion needs dryRun=false and delete=true, and is recorded in the audit file. Call it only after ArchiveProject confirmed the newest archive")]
         public static ResponsePrune PruneArchives(
             [Description("archiveDirectory: absolute path of the archive folder")] string archiveDirectory,
             [Description("projectName: the project whose archives are pruned; empty takes the open project")] string projectName = "",

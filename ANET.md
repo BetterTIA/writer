@@ -1,6 +1,6 @@
 # ANet fork (TIAC_Writer)
 
-Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.5.1`.
+Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.5.2`.
 Local only - nothing is pushed.
 
 The fork adds what renaming objects in a real project needed and upstream did not have. All
@@ -76,7 +76,10 @@ whether `AcquisitionCycle` takes `T1s`, and the event text markup.
 `ArchiveProject` writes the open project as a compressed zap file (`Project.Archive` with
 `ProjectArchivationMode.Compressed`) into an archive folder outside the project folder;
 `PruneArchives` keeps the newest full version and the newest three checkpoints of a project and
-deletes every older archive (operator's decision, 2026-10-15). Neither tool schedules itself: the agent or the BetterTIA Editor
+deletes every older archive (operator's decision, 2026-10-15). Newest means by the time in the
+name, never by the version alone: a later archive with a lower version is kept, and an archive
+that is older by time but higher by version than a kept one of its kind is kept as well and
+reported (`Warnings`), because time and version disagree and the operator has to look. Neither tool schedules itself: the agent or the BetterTIA Editor
 calls them (before the first change of a session, after a series of accepted changes, at the end
 of the day), and the operator confirms the version number - the tool never invents one.
 

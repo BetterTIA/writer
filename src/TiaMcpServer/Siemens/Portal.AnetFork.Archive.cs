@@ -169,14 +169,17 @@ namespace TiaMcpServer.Siemens
                         ? Safe(() => _project?.Name) ?? throw new PortalException(PortalErrorCode.InvalidParams, "No project is open; give projectName.")
                         : projectName.Trim();
 
-                    var (keep, remove) = ArchiveRules.Plan(Directory.GetFiles(archiveDirectory), name);
+                    var plan = ArchiveRules.Plan(Directory.GetFiles(archiveDirectory), name);
+                    var keep = plan.Keep;
+                    var remove = plan.Delete;
 
                     var result = new PruneResult
                     {
                         Directory = archiveDirectory,
                         ProjectName = name,
                         Kept = keep.Select(a => Path.GetFileName(a.Path)).ToList(),
-                        Deleted = remove.Select(a => Path.GetFileName(a.Path)).ToList()
+                        Deleted = remove.Select(a => Path.GetFileName(a.Path)).ToList(),
+                        Warnings = plan.Warnings.ToList()
                     };
 
                     if (!keep.Any(a => a.Kind == ArchiveRules.Full))

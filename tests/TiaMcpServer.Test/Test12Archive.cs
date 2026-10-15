@@ -87,7 +87,9 @@ namespace TiaMcpServer.Test
                 "readme.txt"
             };
 
-            var (keep, delete) = ArchiveRules.Plan(files, "line1");
+            var plan = ArchiveRules.Plan(files, "line1");
+            var keep = plan.Keep;
+            var delete = plan.Delete;
 
             CollectionAssert.AreEquivalent(
                 new[] { "Line1_2026-10-10_0900_V2.2.0.zap21", "Line1_2026-10-15_1430_V2.2.5.zap21", "Line1_2026-10-15_0900_V2.2.4.zap21", "Line1_2026-10-14_0900_V2.2.3.zap21" },
@@ -101,10 +103,38 @@ namespace TiaMcpServer.Test
         [TestMethod]
         public void Test_1207_Plan_WithLittleToPrune_DeletesNothing()
         {
-            var (keep, delete) = ArchiveRules.Plan(new[] { "Line1_2026-10-13_0900_V2.2.1.zap21", "Line1_2026-10-14_0900_V2.2.2.zap21", "Line1_2026-10-10_0900_V2.2.0.zap21" }, "Line1");
+            var plan = ArchiveRules.Plan(new[] { "Line1_2026-10-13_0900_V2.2.1.zap21", "Line1_2026-10-14_0900_V2.2.2.zap21", "Line1_2026-10-10_0900_V2.2.0.zap21" }, "Line1");
+            var keep = plan.Keep;
+            var delete = plan.Delete;
 
             Assert.AreEqual(3, keep.Count);
             Assert.AreEqual(0, delete.Count);
+        }
+
+        [TestMethod]
+        public void Test_1208_Plan_OrdersByTimeAndKeepsAConflictingHigherVersion()
+        {
+            // The newest archives by time carry lower versions than an older one (a typo, or work on an older branch).
+            var files = new[]
+            {
+                "Line1_2026-10-15_1000_V2.3.0.zap21",   // older by time, but the highest full version
+                "Line1_2026-10-15_1200_V2.2.0.zap21",   // newest full by time
+                "Line1_2026-10-14_0900_V2.2.9.zap21",   // older by time, higher interim version
+                "Line1_2026-10-15_1300_V2.2.1.zap21",
+                "Line1_2026-10-15_1400_V2.2.2.zap21",
+                "Line1_2026-10-15_1500_V2.2.3.zap21",
+                "Line1_2026-10-13_0900_V2.1.5.zap21"    // older by time and lower than every kept interim: goes
+            };
+
+            var plan = ArchiveRules.Plan(files, "Line1");
+
+            CollectionAssert.AreEquivalent(
+                new[] { "Line1_2026-10-15_1200_V2.2.0.zap21", "Line1_2026-10-15_1500_V2.2.3.zap21", "Line1_2026-10-15_1400_V2.2.2.zap21", "Line1_2026-10-15_1300_V2.2.1.zap21",
+                        "Line1_2026-10-15_1000_V2.3.0.zap21", "Line1_2026-10-14_0900_V2.2.9.zap21" },
+                plan.Keep.Select(a => a.Path).ToArray(), "time decides; the two archives where version and time disagree are kept and reported");
+            CollectionAssert.AreEqual(new[] { "Line1_2026-10-13_0900_V2.1.5.zap21" }, plan.Delete.Select(a => a.Path).ToArray());
+            Assert.AreEqual(2, plan.Warnings.Count);
+            StringAssert.Contains(plan.Warnings[0], "V2.3.0");
         }
     }
 }

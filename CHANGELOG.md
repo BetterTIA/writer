@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Changed (ANet fork, 0.2.5.2)
+
+- `PruneArchives` orders archives by the time in the name, the version only breaks a tie; an
+  archive older by time but higher by version than a kept one is kept and reported. Tool title
+  reads "Delete old project archives". README: tool counts and the fork's rename and text tools
+  listed by name.
+
 ### Added (ANet fork, 0.2.5.0)
 
 - __WinCC Unified tag tables, tags and alarms__: `CreateHmiTagTable`, `RenameHmiTagTable`,

@@ -79,6 +79,8 @@ read-side `CompileBlock` - see [ANET.md](ANET.md).
 | Watch tables          | `CreateWatchTable`, `RenameWatchTable`, `DeleteWatchTable`, `CreateWatchTableGroup`, `DeleteWatchTableGroup`, `ImportWatchTable`                        |
 | External sources      | `CreateExternalSourceFromFile`, `DeleteExternalSource`, `CreateExternalSourceGroup`, `DeleteExternalSourceGroup`, `ImportExternalSource`, `ImportSourceBlock`, `ImportSourceType`, `ImportSourceBlocks`, `ImportSourceTypes`, `ImportSources` |
 | Type documents (V21+) | `ImportTypeFromDocuments`, `ImportTypesFromDocuments`                                                                                                   |
+| Renames and texts     | `RenameBlockGroup`, `RenameTypeGroup`, `RenameTagTableGroup`, `RenameWatchTableGroup`, `RenameTechnologicalObject`, `RenameTags`, `RenameObjects`, `RenameMembers`, `SetNetworkText`, `ReplaceNetworkText`, `SetTagComment`, `ReplaceTagComments` (ANet fork) |
+| WinCC Unified binding | `SetHmiTagPlcTags`, `RenameHmiTags`, `RenameHmiScreen`, `RenameHmiScreens`, `ReplaceInHmiScripts`, `SetHmiItemAttribute`, `SetHmiDynamizationTag` (ANet fork) |
 | Hardware and network  | `AddDevice`, `ConfigureNode`, `CreateSubnet`, `UpdateSubnet`, `DeleteSubnet` (ANet fork)                                                               |
 | Project archives      | `ArchiveProject`, `PruneArchives` (ANet fork)                                                                                                           |
 | WinCC Unified         | `CreateHmiTagTable`, `RenameHmiTagTable`, `DeleteHmiTagTable`, `CreateHmiTags`, `UpdateHmiTag`, `DeleteHmiTags`, `CreateHmiAlarms`, `UpdateHmiAlarm`, `DeleteHmiAlarms` (ANet fork) |
@@ -245,7 +247,7 @@ These are not gaps in this server - the underlying API offers no operation for t
 - Built on the [ModelContextProtocol](https://www.nuget.org/packages/ModelContextProtocol) .NET SDK **2.2.0**.
 - Protocol revisions negotiated during `initialize`: `2024-11-05`, `2025-03-26`, `2025-06-18`, `2025-11-25` (the SDK picks the highest the client also supports).
 - Every tool advertises a human-readable `title` and behaviour annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`).
-- 27 read tools and all 37 write tools publish an `outputSchema` and return `structuredContent`.
+- 42 of the 58 read tools and all 79 write tools publish an `outputSchema` and return `structuredContent`.
 - Long-running export/import tools report progress via `notifications/progress` when the client supplies a `progressToken`.
 - Tool failures are returned as tool results with `isError: true` (not JSON-RPC errors), so the model can read the message and retry.
 
