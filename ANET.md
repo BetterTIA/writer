@@ -1,6 +1,6 @@
 # ANet fork (TIAC_Writer)
 
-Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.5.2`.
+Branch `anet` of `heilingbrunner/tiaportal-mcp`, forked at `684969a`. Server version `0.2.6.0`.
 Local only - nothing is pushed.
 
 The fork adds what renaming objects in a real project needed and upstream did not have. All
@@ -33,6 +33,51 @@ table path now also find tables whose name contains `/` (upstream split the path
 
 `GetProject` no longer fails on projects whose attributes hold Openness objects: attribute values
 that the JSON serializer cannot write are reported as text (`Helper.GetAttributeList`).
+
+## WinCC Unified screens and screen items (0.2.6.0)
+
+Creating and deleting screens and the items on them, next to the tag, alarm and attribute tools.
+`softwarePath` names the HMI software; every tool defaults to `dryRun=true`. Openness V21 creates a
+screen with `HmiScreenComposition.Create(name)` and an item with `ScreenItems.Create<T>(name)`; it
+offers no copy of a screen and no screen template (checked by reflection over the V21 assemblies),
+so a new screen is empty and gets its items from `CreateHmiScreenItems`.
+
+| Tool                                  | What it does                                                                                     |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `CreateHmiScreen` / `DeleteHmiScreen` | screen at the root or in a screen group, optional width and height; delete lists the script lines of other screens that hold the name as a string |
+| `CreateHmiScreenItems`                | batch from a JSON array: `type` (Button, IOField, Text, Rectangle, Circle), `name`, `left`, `top`, `width`, `height`, optional `text`, `properties`, `dynamizations`, `events` |
+| `DeleteHmiScreenItems`                | batch by name; the dry run reports type, dynamizations and scripts of each item                  |
+
+The items come as JSON, not in the `;`/`|` batch format of the tag tools, because event scripts
+hold both characters. `properties` holds further properties by their Openness name (`BackColor`,
+`Visible`, `ProcessValue`, `IOFieldType`, `BorderWidth`, ...) with the value as text: an enum by
+name, a colour as `#RRGGBB` or `#AARRGGBB`, numbers and booleans in invariant culture.
+`dynamizations` maps a property to an HMI tag (a `TagDynamization`), `events` an event to its
+JavaScript (`Tapped`, `Down`, `Up`, ... as the `EventHandlers` enum of the type names them). A
+circle has no left/top/width/height in Openness but a centre and a radius: `width` is taken as the
+diameter and the circle is inscribed in the square at `left`/`top`. There is no "system function"
+object in the API; an event is always a script, and the Writer writes the script as given.
+
+Every item is checked before anything is created, in the dry run as well: the name must be free on
+the screen, the text needs a type with a `Text` property, every property and dynamization target
+must be a writable property of the Openness class (found by reflection, `HmiScreenSpecs.Problem`),
+every event must be one of the enum of the type, and every tag of a dynamization must exist as an
+HMI tag. Items that fail are reported and skipped, the others go through; an item TIA Portal refuses
+while it is set up is deleted again; a batch where no item can go through fails as a whole.
+
+Not available: screen copies and templates, items of other types (faceplates, graphic views, text
+boxes, ...), dynamizations other than by tag, property events, system functions as event handlers,
+texts in more than one language in one call (pass `culture` and call again).
+
+Verified without TIA Portal: the parsing and the rules (`Test14HmiScreenSpecs`, against stand-in
+types shaped like the Openness classes), build, registration; the Openness members used
+(`HmiScreenComposition.Create`, `HmiScreenItemBaseComposition.Create<T>`,
+`Dynamizations.Create<TagDynamization>`, the `EventHandlers.Create(enum)` of each type and
+`IHmiScript.ScriptCode`, the geometry and colour properties) were checked against the V21 assemblies
+by reflection. Not verified against a running TIA Portal: everything else - whether a created item
+takes its geometry before it is placed, whether `SetAttribute` accepts a `System.Drawing.Color`,
+whether an event script written through `IHmiScript.ScriptCode` compiles, and what TIA Portal does
+with a screen of width 0.
 
 ## WinCC Unified tag tables, tags and alarms (0.2.5.0)
 
@@ -321,4 +366,4 @@ there. A Release build would overwrite, or fail on, the files of the running ser
 - `ModelContextProtocol/McpServer.Blocks.cs`, `McpServer.Documents.cs`, `Responses.cs`: `ContentHash` on the
   XML and document exports, `expectedContentHash` on `ImportXmlBlock` and `ImportFromDocuments` (0.2.3.0).
 - `Program.cs`: the `WriteAudit` call-tool filter and the tracking of the audited tools (0.2.3.0).
-- `TiaMcpServer.csproj`: `AssemblyVersion` 0.2.3.0, so `--doctor` tells the fork from the original.
+- `TiaMcpServer.csproj`: `AssemblyVersion` 0.2.6.0, so `--doctor` tells the fork from the original.
