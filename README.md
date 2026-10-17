@@ -1,6 +1,6 @@
 # TIA-Portal MCP-Server
 
-> **BetterTIA Writer** — this is a fork of [heilingbrunner/tiaportal-mcp](https://github.com/heilingbrunner/tiaportal-mcp) (MIT). Additions (batch renames, network texts, member renames, WinCC Unified tools, hardware and network writes, fail-safe impact checks, name collision and content hash checks, an audit file) are described in [ANET.md](ANET.md). Not all of them are verified against a running TIA Portal; ANET.md says which.
+> **BetterTIA Writer** — this is a fork of [heilingbrunner/tiaportal-mcp](https://github.com/heilingbrunner/tiaportal-mcp) (MIT). Additions (batch renames, network texts, member renames, WinCC Unified tools including screens and screen items, hardware and network writes, fail-safe impact checks, name collision and content hash checks, an audit file) are described in [ANET.md](ANET.md). Not all of them are verified against a running TIA Portal; ANET.md says which.
 >
 > Part of the [BetterTIA](https://github.com/BetterTIA) set: [reader](https://github.com/BetterTIA/reader) · **writer** (this repository) · [editor](https://github.com/BetterTIA/editor) · [watch](https://github.com/BetterTIA/watch). The BetterTIA additions are developed, used and tested only with TIA Portal V21.
 
@@ -64,9 +64,9 @@ Read-only tools (62) are always available.
 | Type documents (V21+)         | `ExportTypeAsDocuments`, `ExportTypesAsDocuments`                                                                                                                                                      |
 | Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockSource`, `GetTypeSource`, `GetBlockInterface`, `PreviewImport`, `OpenTiaProject`, `ExportPlcAsDocuments`, `ExportSources` |
 
-Write tools (79) require `--allow-write`. Thirty-five of them are additions of the ANet fork: the batch and
+Write tools (83) require `--allow-write`. Thirty-nine of them are additions of the ANet fork: the batch and
 group renames, tag comments, network texts and member rename, the WinCC Unified tools (binding, renames,
-scripts, tag tables, tags, alarms), the hardware and network tools and the project archives, as is the
+scripts, tag tables, tags, alarms, screens and screen items), the hardware and network tools and the project archives, as is the
 read-side `CompileBlock` - see [ANET.md](ANET.md).
 
 | Area                  | Tools                                                                                                                                                   |
@@ -84,6 +84,7 @@ read-side `CompileBlock` - see [ANET.md](ANET.md).
 | Hardware and network  | `AddDevice`, `ConfigureNode`, `CreateSubnet`, `UpdateSubnet`, `DeleteSubnet` (ANet fork)                                                               |
 | Project archives      | `ArchiveProject`, `PruneArchives` (ANet fork)                                                                                                           |
 | WinCC Unified         | `CreateHmiTagTable`, `RenameHmiTagTable`, `DeleteHmiTagTable`, `CreateHmiTags`, `UpdateHmiTag`, `DeleteHmiTags`, `CreateHmiAlarms`, `UpdateHmiAlarm`, `DeleteHmiAlarms` (ANet fork) |
+| WinCC Unified screens | `CreateHmiScreen`, `DeleteHmiScreen`, `CreateHmiScreenItems`, `DeleteHmiScreenItems` (ANet fork)                                                        |
 
 `GetSoftwareTree` accepts a `sections` argument - any comma separated subset of
 `blocks,types,tags,watch,sources`, default `all` - to keep the output small on a large PLC.
@@ -247,7 +248,7 @@ These are not gaps in this server - the underlying API offers no operation for t
 - Built on the [ModelContextProtocol](https://www.nuget.org/packages/ModelContextProtocol) .NET SDK **2.2.0**.
 - Protocol revisions negotiated during `initialize`: `2024-11-05`, `2025-03-26`, `2025-06-18`, `2025-11-25` (the SDK picks the highest the client also supports).
 - Every tool advertises a human-readable `title` and behaviour annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`).
-- 50 of the 66 read tools and all 79 write tools publish an `outputSchema` and return `structuredContent`.
+- 50 of the 66 read tools and all 83 write tools publish an `outputSchema` and return `structuredContent`.
 - Long-running export/import tools report progress via `notifications/progress` when the client supplies a `progressToken`.
 - Tool failures are returned as tool results with `isError: true` (not JSON-RPC errors), so the model can read the message and retry.
 

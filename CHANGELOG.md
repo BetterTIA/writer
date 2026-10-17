@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added (ANet fork, 0.2.6.0)
+
+- __WinCC Unified screens and screen items__: `CreateHmiScreen` (empty screen at the root or in a
+  screen group, optional size), `DeleteHmiScreen` (lists the script lines of other screens that
+  name it), `CreateHmiScreenItems` (buttons, IO fields, texts, rectangles and circles from a JSON
+  array: geometry, text, properties by Openness name, tag dynamizations, event scripts; every
+  item checked against the Openness type before anything is created) and `DeleteHmiScreenItems`.
+  Fail closed per item, `dryRun` by default - see ANET.md. Openness V21 offers no copy of a screen
+  and no template.
+
 ### Changed (ANet fork, 0.2.5.2)
 
 - `PruneArchives` orders archives by the time in the name, the version only breaks a tie; an
