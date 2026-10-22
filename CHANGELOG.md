@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+### Added (ANet fork, 0.2.7.0)
+
+- __Every WinCC Unified item class__ in `CreateHmiScreenItems`: the type is the Openness class
+  without its `Hmi` prefix, read from the Openness assembly (Label - a text with `BackColor` -,
+  ScreenWindow, GraphicView, AlarmControl, AlarmLineControl, WebControl, TrendControl, Bar, Slider,
+  Gauge, Clock, ToggleSwitch, Line, Ellipse, ...), and `Faceplate` with `faceplateType`.
+- __Dotted property paths__ (`Font.Size`, `Font.Weight`, `Font.Name`, `Interface.<entry>.Value`)
+  in `properties` and `dynamizations` of `CreateHmiScreenItems` and in `SetHmiItemAttribute`.
+- __Script dynamizations__: a dynamization is a tag name or an object - `tag` (with `indirect` or
+  `resourceList`) or `script` (with `trigger`). Scripts of dynamizations and events are syntax
+  checked after they are written and the result is reported.
+- `SetHmiItemDynamization` (dynamize one property of an existing item), `ExportHmiTextLists` and
+  `ImportHmiTextLists` (Openness has no Create for text lists), `SetHmiRuntimeSetting` (e.g.
+  `StartScreen`).
+- `CreateHmiScreen` takes event scripts and creates missing screen groups; `UpdateHmiTag` takes
+  further properties as `Name=Value;...` (initial value, linear scaling, start and end values).
+
+### Fixed (ANet fork, 0.2.7.0)
+
+- `SetHmiItemAttribute` converts a colour from `#RRGGBB` (it failed on `System.Drawing.Color`).
+
 ### Added (ANet fork, 0.2.6.0)
 
 - __WinCC Unified screens and screen items__: `CreateHmiScreen` (empty screen at the root or in a

@@ -64,9 +64,9 @@ Read-only tools (62) are always available.
 | Type documents (V21+)         | `ExportTypeAsDocuments`, `ExportTypesAsDocuments`                                                                                                                                                      |
 | Understand and read (comfort) | `GetPlcSummary`, `ResolveObjectPath`, `WhereUsed`, `FindInCode`, `GetBlockSource`, `GetTypeSource`, `GetBlockInterface`, `PreviewImport`, `OpenTiaProject`, `ExportPlcAsDocuments`, `ExportSources` |
 
-Write tools (83) require `--allow-write`. Thirty-nine of them are additions of the ANet fork: the batch and
+Write tools (87) require `--allow-write`. Forty-three of them are additions of the ANet fork: the batch and
 group renames, tag comments, network texts and member rename, the WinCC Unified tools (binding, renames,
-scripts, tag tables, tags, alarms, screens and screen items), the hardware and network tools and the project archives, as is the
+scripts, tag tables, tags, alarms, screens, screen items, dynamizations, text lists and runtime settings), the hardware and network tools and the project archives, as is the
 read-side `CompileBlock` - see [ANET.md](ANET.md).
 
 | Area                  | Tools                                                                                                                                                   |
@@ -84,7 +84,7 @@ read-side `CompileBlock` - see [ANET.md](ANET.md).
 | Hardware and network  | `AddDevice`, `ConfigureNode`, `CreateSubnet`, `UpdateSubnet`, `DeleteSubnet` (ANet fork)                                                               |
 | Project archives      | `ArchiveProject`, `PruneArchives` (ANet fork)                                                                                                           |
 | WinCC Unified         | `CreateHmiTagTable`, `RenameHmiTagTable`, `DeleteHmiTagTable`, `CreateHmiTags`, `UpdateHmiTag`, `DeleteHmiTags`, `CreateHmiAlarms`, `UpdateHmiAlarm`, `DeleteHmiAlarms` (ANet fork) |
-| WinCC Unified screens | `CreateHmiScreen`, `DeleteHmiScreen`, `CreateHmiScreenItems`, `DeleteHmiScreenItems` (ANet fork)                                                        |
+| WinCC Unified screens | `CreateHmiScreen`, `DeleteHmiScreen`, `CreateHmiScreenItems`, `DeleteHmiScreenItems`, `SetHmiItemDynamization`, `ExportHmiTextLists`, `ImportHmiTextLists`, `SetHmiRuntimeSetting` (ANet fork) |
 
 `GetSoftwareTree` accepts a `sections` argument - any comma separated subset of
 `blocks,types,tags,watch,sources`, default `all` - to keep the output small on a large PLC.
@@ -248,7 +248,7 @@ These are not gaps in this server - the underlying API offers no operation for t
 - Built on the [ModelContextProtocol](https://www.nuget.org/packages/ModelContextProtocol) .NET SDK **2.2.0**.
 - Protocol revisions negotiated during `initialize`: `2024-11-05`, `2025-03-26`, `2025-06-18`, `2025-11-25` (the SDK picks the highest the client also supports).
 - Every tool advertises a human-readable `title` and behaviour annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`).
-- 50 of the 66 read tools and all 83 write tools publish an `outputSchema` and return `structuredContent`.
+- 50 of the 66 read tools and all 87 write tools publish an `outputSchema` and return `structuredContent`.
 - Long-running export/import tools report progress via `notifications/progress` when the client supplies a `progressToken`.
 - Tool failures are returned as tool results with `isError: true` (not JSON-RPC errors), so the model can read the message and retry.
 

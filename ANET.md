@@ -34,6 +34,58 @@ table path now also find tables whose name contains `/` (upstream split the path
 `GetProject` no longer fails on projects whose attributes hold Openness objects: attribute values
 that the JSON serializer cannot write are reported as text (`Helper.GetAttributeList`).
 
+## WinCC Unified item types, fonts, script dynamizations, text lists (0.2.7.0)
+
+Extends the screen tools of 0.2.6.0; what was "not available" there is now covered except screen
+copies and templates, which Openness V21 does not offer. Checked by reflection over the V21
+assemblies; nothing of this section ran against a TIA Portal yet.
+
+- __Item types.__ `type` is any concrete item class of `Siemens.Engineering.WinCCUnified` without
+  its `Hmi` prefix, found by reflection at the first call, so the list follows the installed
+  Openness: Button, IOField, SymbolicIOField, Text, Label, TextBox, Rectangle, Circle, Ellipse,
+  Line, Polyline, GraphicView, Bar, Slider, Gauge, Clock, ToggleSwitch, CheckBoxGroup,
+  RadioButtonGroup, ListBox, TouchArea, AlarmIndicator, ScreenWindow, AlarmControl,
+  AlarmLineControl, TrendControl, WebControl, MediaControl and the diagnosis controls. `HmiText`
+  has no `BackColor`; `Label` is the text with background, border and padding. `Faceplate` is
+  `HmiFaceplateContainer`, created with `Create<T>(name, containedTypeValue)` from `faceplateType`.
+- __Geometry__ follows the class: left/top/width/height, or centre and radius (circle, `width` is
+  the diameter), or centre and two radii (ellipse, inscribed in left/top/width/height).
+- __Dotted paths.__ `Font` is a part (`HmiFontPart`: `Size`, `Weight`, `Name`, `Italic`,
+  `Underline`, `StrikeOut`), so `"Font.Size": 16` walks into the part. A segment that is a
+  composition with `Find(string)` takes the next segment as an entry: `Interface.Speed.Value` is
+  the value of the faceplate interface entry `Speed` (the interface has no `Create`; its entries
+  come from the faceplate type). The same paths work in `dynamizations` and in
+  `SetHmiItemAttribute`, which now also converts colours.
+- __Dynamizations__ are a tag name or an object: `{"tag": "X"}`, `{"tag": "X", "indirect": true}`
+  (`UseIndirectAddressing`), `{"tag": "X", "resourceList": "L"}` (`ResourceListDynamization`) or
+  `{"script": "return ...;", "trigger": "T1s"}` (`ScriptDynamization`; trigger is a `TriggerType`
+  name: Disabled, T100ms, T250ms, T500ms, T1s, T2s, T5s, T10s, AutomaticTags; without it the
+  trigger TIA Portal sets stays). A colour or the visibility by state is a script dynamization,
+  no layers or helper tags. A dynamization replaces the one the property had.
+  `SetHmiItemDynamization` does the same on an existing item or screen.
+- __Script check.__ After a script is written (dynamization or event) `SyntaxCheck()` runs; its
+  errors are reported in the item detail `ScriptCheck` (or as a warning) and the script is kept.
+- __Screens.__ `CreateHmiScreen` takes `events` (`Loaded`, `Unloaded`, `Tapped`, `ContextTapped`)
+  and creates screen groups of `groupPath` that do not exist. `SetHmiRuntimeSetting` sets one
+  property of `HmiSoftware.RuntimeSettings`, e.g. `StartScreen` (the screen must exist).
+- __Text lists.__ `HmiTextListComposition` has `Find`, `Export(folder, file)` and
+  `Import(folder, file)` and no `Create`: a list is added by exporting, editing and importing.
+- __HMI tags.__ `UpdateHmiTag` takes `attributes` - `Name=Value` pairs of writable `HmiTag`
+  properties: `InitialValue`, `LinearScaling`, `PlcStartValue`, `PlcEndValue`, `HmiStartValue`,
+  `HmiEndValue`, `Persistent`, ... An object-typed value takes the type it holds now, else text.
+
+Not done: mapping tables of a tag dynamization (`ValueConverter.MappingTable`, range and bitmask
+entries) and flashing dynamizations - their entry semantics (`RangeType` is read-only) need a
+running TIA Portal to pin down; a script dynamization covers the same cases. Trigger tag lists of
+a script (`Trigger.Tags` is typed `object`). Graphics themselves (a GraphicView names a graphic of
+the project).
+
+To verify against a running TIA Portal first: an item of each new kind (Label, ScreenWindow with
+`Screen`, Faceplate with a real type), `Font.Size` through the part, a script dynamization with a
+trigger and what the colour value of a script has to look like, `SyntaxCheck()` output,
+`Interface.<entry>.Value` with a text value, `UpdateHmiTag` with `InitialValue` on an internal tag,
+`SetHmiRuntimeSetting StartScreen`, and the text list file format.
+
 ## WinCC Unified screens and screen items (0.2.6.0)
 
 Creating and deleting screens and the items on them, next to the tag, alarm and attribute tools.
