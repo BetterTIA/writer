@@ -1,29 +1,32 @@
 ﻿using Siemens.Engineering;
 using Siemens.Engineering.HmiUnified;
+using Siemens.Engineering.HmiUnified.Common;
 using Siemens.Engineering.HmiUnified.UI;
 using Siemens.Engineering.HmiUnified.UI.Base;
+using Siemens.Engineering.HmiUnified.UI.Controls;
 using Siemens.Engineering.HmiUnified.UI.Dynamization;
 using Siemens.Engineering.HmiUnified.UI.Dynamization.Script;
-using Siemens.Engineering.HmiUnified.UI.ScreenGroup;
 using Siemens.Engineering.HmiUnified.UI.Screens;
-using Siemens.Engineering.HmiUnified.UI.Shapes;
-using Siemens.Engineering.HmiUnified.UI.Widgets;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 
 namespace TiaMcpServer.Siemens
 {
     public partial class Portal
     {
         // ANet fork additions for WinCC Unified (branch 'anet'): screens and screen items are
-        // created and deleted here. Openness V21 creates a screen with HmiScreenComposition.Create
+        // created and deleted here, items are dynamized, text lists go in and out as files and
+        // runtime settings are set. Openness V21 creates a screen with HmiScreenComposition.Create
         // and an item with HmiScreenItemBaseComposition.Create<T>; it offers no copy of a screen
-        // and no screen template, so a new screen is empty.
+        // and no screen template, so a new screen is empty. Text lists have no Create either, only
+        // Export and Import of a file.
         //
         // Callers: the tools in McpServer.AnetFork.HmiScreens.cs, registered only under
         // '--allow-write' and run inside one TIA Portal transaction each. Affected API: none
-        // existing. No file I/O.
+        // existing. File I/O: ExportHmiTextLists and ImportHmiTextLists, in the folder given.
         //
         // A batch of items fails closed per item: an item whose name is taken, whose tag does not
         // exist or whose property, dynamization or event the type does not have is reported and
@@ -32,22 +35,43 @@ namespace TiaMcpServer.Siemens
 
         #region hmi screens
 
-        /// <summary>The screens of a group path ('Line/Station'); empty names the root.</summary>
-        private static HmiScreenComposition HmiScreensAt(HmiSoftware hmi, string groupPath)
+        /// <summary>
+        /// The screens of a group path ('Line/Station'); empty names the root. Groups that do not
+        /// exist are added to <paramref name="missing"/> and created when <paramref name="create"/>
+        /// is set; without it the result is null as soon as one is missing.
+        /// </summary>
+        private static HmiScreenComposition? HmiScreensAt(HmiSoftware hmi, string groupPath, bool create, List<string> missing)
         {
             var screens = hmi.Screens;
             var groups = hmi.ScreenGroups;
+            var path = string.Empty;
+            var found = true;
 
             foreach (var segment in (groupPath ?? string.Empty).Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries))
             {
-                var group = groups.Find(segment)
-                    ?? throw new PortalException(PortalErrorCode.NotFound, $"No screen group '{segment}' in '{groupPath}'.");
+                path = path.Length == 0 ? segment : $"{path}/{segment}";
+
+                var group = found ? groups.Find(segment) : null;
+
+                if (group == null)
+                {
+                    RequireHmiName(segment);
+                    missing.Add(path);
+                    found = false;
+
+                    if (!create)
+                    {
+                        continue;
+                    }
+
+                    group = groups.Create(segment);
+                }
 
                 screens = group.Screens;
                 groups = group.Groups;
             }
 
-            return screens;
+            return found || create ? screens : null;
         }
 
         private static HmiScreen FindUnifiedScreen(HmiSoftware hmi, string screenName)
@@ -56,15 +80,19 @@ namespace TiaMcpServer.Siemens
                 ?? throw new PortalException(PortalErrorCode.NotSupported, $"'{screenName}' is not a WinCC Unified screen.");
         }
 
-        /// <summary>Creates an empty screen at the root or in a screen group; width and height 0 keep the device default.</summary>
-        public HmiEditResult CreateHmiScreen(string softwarePath, string screenName, string groupPath, uint width, uint height, bool dryRun = true)
+        /// <summary>
+        /// Creates an empty screen at the root or in a screen group, which is created when it does
+        /// not exist; width and height 0 keep the device default. Events get their scripts.
+        /// </summary>
+        public HmiEditResult CreateHmiScreen(string softwarePath, string screenName, string groupPath, uint width, uint height, IDictionary<string, string>? events = null, bool dryRun = true)
         {
             return Operation.Run(_logger, nameof(CreateHmiScreen), PortalErrorCode.CreateFailed,
                 () =>
                 {
                     var hmi = GetHmiSoftwareOrThrow(softwarePath);
-                    var screens = HmiScreensAt(hmi, groupPath);
+                    var missing = new List<string>();
 
+                    HmiScreensAt(hmi, groupPath, false, missing);
                     RequireHmiName(screenName);
 
                     if (HmiScreens(hmi).Any(s => Text(s, "Name").Equals(screenName, StringComparison.OrdinalIgnoreCase)))
@@ -72,14 +100,28 @@ namespace TiaMcpServer.Siemens
                         throw new PortalException(PortalErrorCode.InvalidParams, $"A screen named '{screenName}' already exists.");
                     }
 
+                    var problem = HmiScreenSpecs.EventsProblem("screen", typeof(HmiScreen), events);
+
+                    if (problem != null)
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidParams, $"'{screenName}': {problem}.");
+                    }
+
                     var result = new HmiEditResult();
+                    var where = string.IsNullOrEmpty(groupPath) ? "/" : groupPath;
                     var size = width > 0 || height > 0 ? $"{width}x{height}" : "device default";
 
-                    result.Changes.Add(new XmlChange { Object = screenName, Where = "Create", Old = string.Empty, New = $"{(string.IsNullOrEmpty(groupPath) ? "/" : groupPath)}, {size}" });
+                    foreach (var group in missing)
+                    {
+                        result.Changes.Add(new XmlChange { Object = group, Where = "Create screen group", Old = string.Empty, New = group });
+                    }
+
+                    var change = new XmlChange { Object = screenName, Where = "Create", Old = string.Empty, New = $"{where}, {size}, {events?.Count ?? 0} event(s)" };
+                    result.Changes.Add(change);
 
                     if (!dryRun)
                     {
-                        var screen = screens.Create(screenName);
+                        var screen = HmiScreensAt(hmi, groupPath, true, new List<string>())!.Create(screenName);
 
                         if (width > 0)
                         {
@@ -91,7 +133,17 @@ namespace TiaMcpServer.Siemens
                             screen.Height = height;
                         }
 
-                        result.Changes[0].New = $"{(string.IsNullOrEmpty(groupPath) ? "/" : groupPath)}, {screen.Width}x{screen.Height}";
+                        foreach (var handler in events ?? new Dictionary<string, string>())
+                        {
+                            var errors = AddEvent(screen, typeof(HmiScreen), handler.Key, handler.Value);
+
+                            if (errors != null)
+                            {
+                                result.Warnings.Add($"Syntax check of the {handler.Key} script: {errors}");
+                            }
+                        }
+
+                        change.New = $"{where}, {screen.Width}x{screen.Height}, {events?.Count ?? 0} event(s)";
                         result.Applied = true;
                     }
 
@@ -137,75 +189,185 @@ namespace TiaMcpServer.Siemens
 
         #region hmi screen items
 
-        private static readonly Dictionary<string, Type> _itemTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
+        /// <summary>
+        /// Every item class of WinCC Unified by its name without the 'Hmi' prefix (Button, Label,
+        /// ScreenWindow, AlarmControl...), read from the Openness assembly, so a new item class of
+        /// a later version needs no change here; HmiFaceplateContainer is also known as Faceplate.
+        /// </summary>
+        private static readonly Lazy<Dictionary<string, Type>> _itemTypes = new Lazy<Dictionary<string, Type>>(() =>
         {
-            ["Button"] = typeof(HmiButton),
-            ["IOField"] = typeof(HmiIOField),
-            ["Text"] = typeof(HmiText),
-            ["Rectangle"] = typeof(HmiRectangle),
-            ["Circle"] = typeof(HmiCircle)
-        };
+            Type[] types;
 
-        private static HmiScreenItemBase CreateItem(HmiScreen screen, HmiItemSpec spec)
-        {
-            switch (spec.Type)
+            try
             {
-                case "Button": return screen.ScreenItems.Create<HmiButton>(spec.Name);
-                case "IOField": return screen.ScreenItems.Create<HmiIOField>(spec.Name);
-                case "Text": return screen.ScreenItems.Create<HmiText>(spec.Name);
-                case "Rectangle": return screen.ScreenItems.Create<HmiRectangle>(spec.Name);
-                case "Circle": return screen.ScreenItems.Create<HmiCircle>(spec.Name);
-                default: throw new PortalException(PortalErrorCode.InvalidParams, $"'{spec.Type}' is not an item type.");
+                types = typeof(HmiScreenItemBase).Assembly.GetTypes();
             }
+            catch (ReflectionTypeLoadException ex)
+            {
+                types = ex.Types.Where(t => t != null).ToArray()!;
+            }
+
+            var map = types
+                .Where(t => t.IsPublic && !t.IsAbstract && t.Name.StartsWith("Hmi") && !t.Name.EndsWith("Base") && typeof(HmiScreenItemBase).IsAssignableFrom(t))
+                .ToDictionary(t => t.Name.Substring(3), StringComparer.OrdinalIgnoreCase);
+
+            map[HmiScreenSpecs.Faceplate] = typeof(HmiFaceplateContainer);
+
+            return map;
+        });
+
+        private static HmiScreenItemBase CreateItem(HmiScreen screen, HmiItemSpec spec, Type type)
+        {
+            var faceplate = spec.FaceplateType != null;
+            var create = typeof(HmiScreenItemBaseComposition).GetMethods()
+                .Single(m => m.Name == "Create" && m.GetParameters().Length == (faceplate ? 2 : 1))
+                .MakeGenericMethod(type);
+
+            return (HmiScreenItemBase)create.Invoke(screen.ScreenItems, faceplate ? new object[] { spec.Name, spec.FaceplateType! } : new object[] { spec.Name });
         }
 
-        /// <summary>Geometry as the item's own properties hold it: left/top/width/height, or centre and radius for a circle.</summary>
-        private static Dictionary<string, string> Geometry(HmiItemSpec spec)
+        /// <summary>
+        /// The object a dotted path ends in and the canonical name of its last segment, as
+        /// HmiScreenSpecs.PathProperty walks it: 'Font.Size' is (the Font part, "Size"),
+        /// 'Interface.Speed.Value' is (the interface entry Speed, "Value"). A path without a dot
+        /// stays on <paramref name="item"/>.
+        /// </summary>
+        private static (IEngineeringObject Owner, string Name) ResolvePath(IEngineeringObject item, string path)
         {
-            if (spec.Type == "Circle")
-            {
-                var radius = spec.Width / 2;
+            var segments = path.Split('.');
+            object owner = item;
 
-                return new Dictionary<string, string>
+            for (var i = 0; i < segments.Length - 1; i++)
+            {
+                var property = HmiScreenSpecs.Property(owner.GetType(), segments[i])
+                    ?? throw new PortalException(PortalErrorCode.InvalidParams, $"'{path}': {owner.GetType().Name} has no '{segments[i]}'.");
+                var value = property.GetValue(owner)
+                    ?? throw new PortalException(PortalErrorCode.NotFound, $"'{path}': '{segments[i]}' is empty.");
+                var find = HmiScreenSpecs.Find(value.GetType());
+
+                if (find != null && i + 1 < segments.Length - 1)
                 {
-                    ["CenterX"] = (spec.Left + (int)radius).ToString(),
-                    ["CenterY"] = (spec.Top + (int)radius).ToString(),
-                    ["Radius"] = radius.ToString()
-                };
+                    i++;
+                    value = find.Invoke(value, new object[] { segments[i] })
+                        ?? throw new PortalException(PortalErrorCode.NotFound, $"'{path}': '{segments[i - 1]}' has no entry '{segments[i]}'.");
+                }
+
+                owner = value;
             }
 
-            return new Dictionary<string, string>
-            {
-                ["Left"] = spec.Left.ToString(),
-                ["Top"] = spec.Top.ToString(),
-                ["Width"] = spec.Width.ToString(),
-                ["Height"] = spec.Height.ToString()
-            };
+            var name = HmiScreenSpecs.Property(owner.GetType(), segments[segments.Length - 1])?.Name ?? segments[segments.Length - 1];
+
+            return (owner as IEngineeringObject
+                ?? throw new PortalException(PortalErrorCode.NotSupported, $"'{path}' does not end in an object Openness can set."), name);
         }
 
-        private static void SetProperty(HmiScreenItemBase item, Type type, string name, string value)
+        private static void SetProperty(IEngineeringObject item, string path, string value)
         {
-            var property = HmiScreenSpecs.Property(type, name)!;
+            var (owner, name) = ResolvePath(item, path);
 
-            item.SetAttribute(property.Name, HmiScreenSpecs.Convert(property.PropertyType, value));
+            owner.SetAttribute(name, HmiScreenSpecs.Convert(HmiScreenSpecs.Property(owner.GetType(), name)!.PropertyType, value));
         }
 
-        private static void AddEvent(HmiScreenItemBase item, Type type, string eventName, string script)
+        /// <summary>The errors of a script syntax check as one line, or null when there are none.</summary>
+        private static string? SyntaxErrors(HmiValidationResult? check)
+        {
+            var errors = check?.Errors?.ToList() ?? new List<string>();
+
+            return errors.Count > 0 ? string.Join("; ", errors) : null;
+        }
+
+        /// <summary>Attaches an event script to an item or a screen; returns the errors of its syntax check, or null.</summary>
+        private static string? AddEvent(object target, Type type, string eventName, string script)
         {
             var handlersProperty = HmiScreenSpecs.Property(type, "EventHandlers")!;
-            var handlers = handlersProperty.GetValue(item);
+            var handlers = handlersProperty.GetValue(target);
             var create = handlersProperty.PropertyType.GetMethod("Create")!;
             var eventType = create.GetParameters()[0].ParameterType;
             var handler = create.Invoke(handlers, new[] { Enum.Parse(eventType, eventName, true) })!;
-            var code = handler.GetType().GetProperty("Script")?.GetValue(handler) as IHmiScript
+            var code = HmiScreenSpecs.Property(handler.GetType(), "Script")?.GetValue(handler) as IHmiScript
                 ?? throw new PortalException(PortalErrorCode.NotSupported, $"the handler of '{eventName}' offers no script");
 
             code.ScriptCode = script;
+
+            return SyntaxErrors(code.SyntaxCheck());
+        }
+
+        private static DynamizationBaseComposition Dynamizations(IEngineeringObject owner) =>
+            HmiScreenSpecs.Property(owner.GetType(), "Dynamizations")?.GetValue(owner) as DynamizationBaseComposition
+                ?? throw new PortalException(PortalErrorCode.NotSupported, $"{owner.GetType().Name} cannot be dynamized.");
+
+        /// <summary>What an existing dynamization does, for the report: 'Tag X', 'Script', 'ResourceList X via L'.</summary>
+        private static string Describe(DynamizationBase dynamization) =>
+            dynamization is TagDynamization tag ? $"Tag {tag.Tag}"
+            : dynamization is ResourceListDynamization list ? $"ResourceList {list.Tag} via {list.ResourceList}"
+            : dynamization.DynamizationType.ToString();
+
+        /// <summary>Why the dynamization cannot be made in this HMI: its tag does not exist or its trigger is unknown; null when it can.</summary>
+        private static string? DynamizationProblem(HmiSoftware hmi, HmiDynamizationSpec spec)
+        {
+            if (spec.Tag != null && hmi.Tags.Find(HmiRoot(spec.Tag)) == null)
+            {
+                return $"no HMI tag named '{HmiRoot(spec.Tag)}' exists";
+            }
+
+            if (spec.Trigger != null && !Enum.GetNames(typeof(TriggerType)).Any(n => n.Equals(spec.Trigger, StringComparison.OrdinalIgnoreCase)))
+            {
+                return $"'{spec.Trigger}' is no trigger; use one of {string.Join(", ", Enum.GetNames(typeof(TriggerType)))}";
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Sets the dynamization of one property (a dotted path reaches a part, e.g. Font.Size),
+        /// replacing the one it had. Returns the errors of the script syntax check, or null.
+        /// </summary>
+        private static string? AddDynamization(IEngineeringObject item, string path, HmiDynamizationSpec spec)
+        {
+            var (owner, name) = ResolvePath(item, path);
+            var dynamizations = Dynamizations(owner);
+
+            dynamizations.FirstOrDefault(d => d.PropertyName.Equals(name, StringComparison.OrdinalIgnoreCase))?.Delete();
+
+            if (spec.Script != null)
+            {
+                var script = dynamizations.Create<ScriptDynamization>(name);
+
+                script.ScriptCode = spec.Script;
+
+                if (spec.Trigger != null)
+                {
+                    script.Trigger.Type = (TriggerType)Enum.Parse(typeof(TriggerType), spec.Trigger, true);
+                }
+
+                return SyntaxErrors(script.SyntaxCheck());
+            }
+
+            if (spec.ResourceList != null)
+            {
+                var list = dynamizations.Create<ResourceListDynamization>(name);
+
+                list.Tag = spec.Tag;
+                list.ResourceList = spec.ResourceList;
+
+                return null;
+            }
+
+            var tag = dynamizations.Create<TagDynamization>(name);
+
+            tag.Tag = spec.Tag;
+
+            if (spec.Indirect)
+            {
+                tag.UseIndirectAddressing = true;
+            }
+
+            return null;
         }
 
         /// <summary>
         /// Creates screen items in a batch: type, name and geometry, then the text, the properties,
-        /// the tag dynamizations and the event scripts of each. Every tag must exist as an HMI tag.
+        /// the dynamizations and the event scripts of each. Every tag must exist as an HMI tag.
         /// </summary>
         /// <param name="culture">Language of the texts; may stay empty when the project has one language.</param>
         public HmiWriteResult CreateHmiScreenItems(string softwarePath, string screenName, IList<HmiItemSpec> specs, string culture, bool dryRun = true)
@@ -223,17 +385,22 @@ namespace TiaMcpServer.Siemens
                         var item = new HmiWriteItem { Name = spec.Name };
                         result.Items.Add(item);
 
-                        item.Details["Type"] = spec.Type;
+                        if (!_itemTypes.Value.TryGetValue(spec.Type, out var type))
+                        {
+                            item.Details["Type"] = spec.Type;
+                            Fail(item, $"'{spec.Type}' is not an item type; use one of {string.Join(", ", _itemTypes.Value.Keys.OrderBy(k => k))}");
+                            continue;
+                        }
 
-                        foreach (var geometry in Geometry(spec))
+                        item.Details["Type"] = spec.Type = spec.Type.Equals(HmiScreenSpecs.Faceplate, StringComparison.OrdinalIgnoreCase) ? HmiScreenSpecs.Faceplate : type.Name.Substring(3);
+
+                        foreach (var geometry in HmiScreenSpecs.Geometry(spec, type))
                         {
                             item.Details[geometry.Key] = geometry.Value;
                         }
 
-                        var missingTag = (spec.Dynamizations ?? new Dictionary<string, string>()).Values
-                            .Select(HmiRoot)
-                            .FirstOrDefault(t => hmi.Tags.Find(t) == null);
-                        var problem = HmiScreenSpecs.Problem(spec, _itemTypes[spec.Type]);
+                        var problem = HmiScreenSpecs.Problem(spec, type)
+                            ?? spec.DynamizationSpecs.Values.Select(d => DynamizationProblem(hmi, d)).FirstOrDefault(p => p != null);
 
                         if (existing.Contains(spec.Name))
                         {
@@ -242,10 +409,6 @@ namespace TiaMcpServer.Siemens
                         else if (problem != null)
                         {
                             Fail(item, problem);
-                        }
-                        else if (missingTag != null)
-                        {
-                            Fail(item, $"no HMI tag named '{missingTag}' exists");
                         }
                     }
 
@@ -257,43 +420,63 @@ namespace TiaMcpServer.Siemens
                     foreach (var (spec, item) in specs.Zip(result.Items, (s, i) => (s, i)).Where(p => p.i.Ok))
                     {
                         HmiScreenItemBase? created = null;
-                        var type = _itemTypes[spec.Type];
+                        var type = _itemTypes.Value[spec.Type];
+                        var scriptErrors = new List<string>();
 
                         try
                         {
-                            created = CreateItem(screen, spec);
+                            created = CreateItem(screen, spec, type);
 
-                            foreach (var geometry in Geometry(spec).Concat(spec.PropertyValues))
+                            foreach (var property in HmiScreenSpecs.Geometry(spec, type).Concat(spec.PropertyValues))
                             {
-                                SetProperty(created, type, geometry.Key, geometry.Value);
+                                SetProperty(created, property.Key, property.Value);
                             }
 
                             if (spec.Text != null)
                             {
-                                SetText((MultilingualText)created.GetAttribute("Text"), culture, spec.Text, $"{spec.Name}.Text");
+                                var text = created.GetAttribute("Text") as MultilingualText
+                                    ?? throw new PortalException(PortalErrorCode.NotSupported, $"the Text of a {spec.Type} is no multilingual text");
+
+                                SetText(text, culture, spec.Text, $"{spec.Name}.Text");
                             }
 
-                            foreach (var dynamization in spec.Dynamizations ?? new Dictionary<string, string>())
+                            foreach (var dynamization in spec.DynamizationSpecs)
                             {
-                                created.Dynamizations.Create<TagDynamization>(HmiScreenSpecs.Property(type, dynamization.Key)!.Name).Tag = dynamization.Value;
+                                var errors = AddDynamization(created, dynamization.Key, dynamization.Value);
+
+                                if (errors != null)
+                                {
+                                    scriptErrors.Add($"{dynamization.Key}: {errors}");
+                                }
                             }
 
                             foreach (var handler in spec.Events ?? new Dictionary<string, string>())
                             {
-                                AddEvent(created, type, handler.Key, handler.Value);
+                                var errors = AddEvent(created, type, handler.Key, handler.Value);
+
+                                if (errors != null)
+                                {
+                                    scriptErrors.Add($"{handler.Key}: {errors}");
+                                }
                             }
 
-                            foreach (var geometry in Geometry(spec).Keys)
+                            foreach (var geometry in HmiScreenSpecs.Geometry(spec, type).Keys)
                             {
                                 item.Details[geometry] = created.GetAttribute(geometry)?.ToString() ?? string.Empty;
                             }
 
-                            item.Details["Dynamizations"] = (spec.Dynamizations?.Count ?? 0).ToString();
+                            item.Details["Dynamizations"] = spec.DynamizationSpecs.Count.ToString();
                             item.Details["Events"] = (spec.Events?.Count ?? 0).ToString();
+
+                            // The script is kept: the check may not know tags or functions the runtime has.
+                            if (scriptErrors.Count > 0)
+                            {
+                                item.Details["ScriptCheck"] = string.Join(" | ", scriptErrors);
+                            }
                         }
-                        catch (Exception ex) when (ex is EngineeringException || ex is PortalException || ex is ArgumentException || ex is FormatException || ex is OverflowException || ex is System.Reflection.TargetInvocationException)
+                        catch (Exception ex) when (ex is EngineeringException || ex is PortalException || ex is ArgumentException || ex is FormatException || ex is OverflowException || ex is InvalidCastException || ex is TargetInvocationException)
                         {
-                            Fail(item, (ex as System.Reflection.TargetInvocationException)?.InnerException?.Message ?? ex.Message);
+                            Fail(item, (ex as TargetInvocationException)?.InnerException?.Message ?? ex.Message);
 
                             // Fail closed: a half-made item is removed again.
                             if (created != null)
@@ -367,6 +550,155 @@ namespace TiaMcpServer.Siemens
                     return Finish(result, dryRun, "screen item");
                 },
                 ("softwarePath", softwarePath), ("screenName", screenName), ("count", names.Count), ("dryRun", dryRun));
+        }
+
+        /// <summary>
+        /// Sets the dynamization of one property of a screen item (or of the screen, with an empty
+        /// item name): a tag, a tag with a resource list or a script. A dotted path reaches a part,
+        /// e.g. Font.Size. The dynamization the property had is replaced.
+        /// </summary>
+        public HmiEditResult SetHmiItemDynamization(string softwarePath, string screenName, string itemName, string property, HmiDynamizationSpec spec, bool dryRun = true)
+        {
+            return Operation.Run(_logger, nameof(SetHmiItemDynamization), PortalErrorCode.CreateFailed,
+                () =>
+                {
+                    var hmi = GetHmiSoftwareOrThrow(softwarePath);
+                    var item = FindItem(hmi, screenName, itemName);
+                    var problem = HmiScreenSpecs.PathProperty(item.GetType(), property) == null
+                        ? $"{item.GetType().Name} has no property '{property}' to dynamize"
+                        : DynamizationProblem(hmi, spec);
+
+                    if (problem != null)
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidParams, $"'{(string.IsNullOrEmpty(itemName) ? screenName : itemName)}': {problem}.");
+                    }
+
+                    var (owner, name) = ResolvePath(item, property);
+                    var old = Dynamizations(owner).FirstOrDefault(d => d.PropertyName.Equals(name, StringComparison.OrdinalIgnoreCase));
+                    var result = new HmiEditResult();
+
+                    result.Changes.Add(new XmlChange
+                    {
+                        Object = screenName,
+                        Where = $"{(string.IsNullOrEmpty(itemName) ? "screen" : itemName)}, dynamization {property}",
+                        Old = old == null ? string.Empty : Describe(old),
+                        New = spec.ToString()
+                    });
+
+                    if (!dryRun)
+                    {
+                        var errors = AddDynamization(item, property, spec);
+
+                        if (errors != null)
+                        {
+                            result.Warnings.Add($"Syntax check of the script: {errors}");
+                        }
+
+                        result.Applied = true;
+                    }
+
+                    return result;
+                },
+                ("softwarePath", softwarePath), ("screenName", screenName), ("itemName", itemName), ("property", property), ("dryRun", dryRun));
+        }
+
+        #endregion
+
+        #region hmi text lists and runtime settings
+
+        /// <summary>Exports the text lists of the HMI to a file in <paramref name="folder"/>; returns the files written.</summary>
+        public HmiEditResult ExportHmiTextLists(string softwarePath, string folder, string fileName)
+        {
+            return Operation.Run(_logger, nameof(ExportHmiTextLists), PortalErrorCode.ExportFailed,
+                () =>
+                {
+                    var hmi = GetHmiSoftwareOrThrow(softwarePath);
+                    var directory = Directory.CreateDirectory(folder);
+                    var result = new HmiEditResult();
+
+                    foreach (var file in hmi.HmiTextLists.Export(directory, fileName))
+                    {
+                        result.Changes.Add(new XmlChange { Object = file.FullName, Where = "Export", Old = string.Empty, New = $"{hmi.HmiTextLists.Count} text list(s)" });
+                    }
+
+                    return result;
+                },
+                ("softwarePath", softwarePath), ("folder", folder), ("fileName", fileName));
+        }
+
+        /// <summary>
+        /// Imports text lists from a file of ExportHmiTextLists (edited or from another project).
+        /// The dry run checks the file and lists the text lists the HMI has now.
+        /// </summary>
+        public HmiEditResult ImportHmiTextLists(string softwarePath, string folder, string fileName, bool dryRun = true)
+        {
+            return Operation.Run(_logger, nameof(ImportHmiTextLists), PortalErrorCode.ImportFailed,
+                () =>
+                {
+                    var hmi = GetHmiSoftwareOrThrow(softwarePath);
+
+                    if (!Directory.Exists(folder) || !Directory.EnumerateFiles(folder, fileName + "*").Any())
+                    {
+                        throw new PortalException(PortalErrorCode.NotFound, $"No file '{fileName}' in '{folder}'. Export one with ExportHmiTextLists to see the format.");
+                    }
+
+                    var before = hmi.HmiTextLists.Select(l => l.Name).ToList();
+                    var result = new HmiEditResult();
+
+                    result.Changes.Add(new XmlChange { Object = Path.Combine(folder, fileName), Where = "Import", Old = $"{before.Count} text list(s)", New = string.Empty });
+
+                    if (!dryRun)
+                    {
+                        if (!hmi.HmiTextLists.Import(new DirectoryInfo(folder), fileName))
+                        {
+                            throw new PortalException(PortalErrorCode.ImportFailed, $"TIA Portal did not import '{fileName}' from '{folder}'.");
+                        }
+
+                        var added = hmi.HmiTextLists.Select(l => l.Name).Except(before).ToList();
+
+                        result.Changes[0].New = $"{hmi.HmiTextLists.Count} text list(s); new: {(added.Count > 0 ? string.Join(", ", added) : "none")}";
+                        result.Applied = true;
+                    }
+
+                    return result;
+                },
+                ("softwarePath", softwarePath), ("folder", folder), ("fileName", fileName), ("dryRun", dryRun));
+        }
+
+        /// <summary>Sets one runtime setting of the HMI, e.g. StartScreen; a start screen must exist.</summary>
+        public HmiEditResult SetHmiRuntimeSetting(string softwarePath, string attribute, string value, bool dryRun = true)
+        {
+            return Operation.Run(_logger, nameof(SetHmiRuntimeSetting), PortalErrorCode.RenameFailed,
+                () =>
+                {
+                    var hmi = GetHmiSoftwareOrThrow(softwarePath);
+                    var settings = hmi.RuntimeSettings;
+                    var property = HmiScreenSpecs.Property(settings.GetType(), attribute);
+
+                    if (property == null || !property.CanWrite)
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidParams,
+                            $"'{attribute}' is no writable runtime setting; settable: {string.Join(", ", settings.GetType().GetProperties().Where(p => p.CanWrite).Select(p => p.Name))}.");
+                    }
+
+                    if (property.Name == "StartScreen")
+                    {
+                        value = FindUnifiedScreen(hmi, value).Name;
+                    }
+
+                    var result = new HmiEditResult();
+
+                    result.Changes.Add(new XmlChange { Object = "RuntimeSettings", Where = property.Name, Old = property.GetValue(settings)?.ToString() ?? string.Empty, New = value });
+
+                    if (!dryRun)
+                    {
+                        property.SetValue(settings, HmiScreenSpecs.Convert(property.PropertyType, value));
+                        result.Applied = true;
+                    }
+
+                    return result;
+                },
+                ("softwarePath", softwarePath), ("attribute", attribute), ("dryRun", dryRun));
         }
 
         #endregion

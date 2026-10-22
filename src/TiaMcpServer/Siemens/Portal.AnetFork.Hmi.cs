@@ -657,15 +657,16 @@ namespace TiaMcpServer.Siemens
         /// <summary>
         /// Sets one attribute of a screen item (or of the screen, with an empty item name): its
         /// name, a graphic, a text. A multilingual text is set for one language; any other value
-        /// is converted to the type the attribute holds now.
+        /// is converted to the type the attribute holds now (a colour from '#RRGGBB'). A dotted
+        /// path reaches into a part, e.g. Font.Size or Interface.Speed.Value of a faceplate.
         /// </summary>
         public HmiEditResult SetHmiItemAttribute(string softwarePath, string screenName, string itemName, string attribute, string value, string culture = "", bool dryRun = true)
         {
             return Operation.Run(_logger, nameof(SetHmiItemAttribute), PortalErrorCode.RenameFailed,
                 () =>
                 {
-                    var item = FindItem(GetHmiSoftwareOrThrow(softwarePath), screenName, itemName);
-                    var current = item.GetAttribute(attribute);
+                    var (item, leaf) = ResolvePath(FindItem(GetHmiSoftwareOrThrow(softwarePath), screenName, itemName), attribute);
+                    var current = item.GetAttribute(leaf);
                     var result = new HmiEditResult();
                     var where = $"{(string.IsNullOrEmpty(itemName) ? "screen" : itemName)}.{attribute}";
 
@@ -688,14 +689,13 @@ namespace TiaMcpServer.Siemens
                     }
                     else
                     {
-                        var type = current?.GetType() ?? typeof(string);
-                        var converted = type.IsEnum ? Enum.Parse(type, value, true) : Convert.ChangeType(value, type, CultureInfo.InvariantCulture);
+                        var converted = HmiScreenSpecs.Convert(current?.GetType() ?? typeof(string), value);
 
                         result.Changes.Add(new XmlChange { Object = screenName, Where = where, Old = current?.ToString() ?? string.Empty, New = value });
 
                         if (!dryRun)
                         {
-                            item.SetAttribute(attribute, converted);
+                            item.SetAttribute(leaf, converted);
                         }
                     }
 

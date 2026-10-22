@@ -123,7 +123,7 @@ Common parameter values:
 - softwarePath: defines the path in the project structure to the HMI software
 - screenName: name of the screen
 - itemName: name of the screen item; empty addresses the screen itself
-- attribute: name of the attribute as Openness calls it, e.g. Name, Text, Graphic, Visible
+- attribute: name of the attribute as Openness calls it, e.g. Name, Text, Graphic, Visible, or a dotted path such as Font.Size
 - value: the new value
 - culture: language of a text attribute, e.g. en-US; may stay empty when the project has one language
 - dryRun: true only reports what would change; false sets the attribute

@@ -387,8 +387,12 @@ namespace TiaMcpServer.Siemens
                 ("softwarePath", softwarePath), ("tableName", tableName), ("count", specs.Count), ("dryRun", dryRun));
         }
 
-        /// <summary>Changes the connection, PLC path, data type (internal tags) or acquisition cycle of one tag; empty keeps a value.</summary>
-        public HmiEditResult UpdateHmiTag(string softwarePath, string tagName, string connection, string plcTag, string dataType, string acquisitionCycle, bool dryRun = true)
+        /// <summary>
+        /// Changes the connection, PLC path, data type (internal tags) or acquisition cycle of one
+        /// tag, and any further writable property by name in <paramref name="attributes"/>
+        /// ('InitialValue=0;LinearScaling=true;PlcStartValue=0;PlcEndValue=27648'); empty keeps a value.
+        /// </summary>
+        public HmiEditResult UpdateHmiTag(string softwarePath, string tagName, string connection, string plcTag, string dataType, string acquisitionCycle, string attributes = "", bool dryRun = true)
         {
             return Operation.Run(_logger, nameof(UpdateHmiTag), PortalErrorCode.RenameFailed,
                 () =>
@@ -420,9 +424,26 @@ namespace TiaMcpServer.Siemens
                         sets.Add(("AcquisitionCycle", tag.AcquisitionCycle ?? string.Empty, acquisitionCycle, () => tag.AcquisitionCycle = acquisitionCycle));
                     }
 
+                    foreach (var pair in (attributes ?? string.Empty).Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        var parts = pair.Split(new[] { '=' }, 2);
+                        var property = HmiScreenSpecs.Property(tag.GetType(), parts[0].Trim());
+
+                        if (parts.Length != 2 || property == null || !property.CanWrite)
+                        {
+                            throw new PortalException(PortalErrorCode.InvalidParams, $"'{pair}' is not 'Name=Value' of a writable property of an HMI tag (e.g. InitialValue, LinearScaling, PlcStartValue, HmiEndValue).");
+                        }
+
+                        var old = property.GetValue(tag);
+                        // An object-typed value (InitialValue, start and end values) takes the type it holds now, else text.
+                        var converted = HmiScreenSpecs.Convert(property.PropertyType == typeof(object) ? old?.GetType() ?? typeof(string) : property.PropertyType, parts[1]);
+
+                        sets.Add((property.Name, old?.ToString() ?? string.Empty, parts[1], () => property.SetValue(tag, converted)));
+                    }
+
                     if (sets.Count == 0)
                     {
-                        throw new PortalException(PortalErrorCode.InvalidParams, "No change was requested: give connection, plcTag, dataType or acquisitionCycle.");
+                        throw new PortalException(PortalErrorCode.InvalidParams, "No change was requested: give connection, plcTag, dataType, acquisitionCycle or attributes.");
                     }
 
                     foreach (var (where, oldValue, newValue, _) in sets)
@@ -449,7 +470,7 @@ namespace TiaMcpServer.Siemens
 
                     return result;
                 },
-                ("softwarePath", softwarePath), ("tagName", tagName), ("dryRun", dryRun));
+                ("softwarePath", softwarePath), ("tagName", tagName), ("attributes", attributes), ("dryRun", dryRun));
         }
 
         /// <summary>Deletes tags by name; the dry run lists where they are used (dynamizations, scripts, alarms).</summary>

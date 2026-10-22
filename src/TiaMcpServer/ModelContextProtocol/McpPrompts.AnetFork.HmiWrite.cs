@@ -87,7 +87,7 @@ Use the CreateHmiTags tool with these parameters:
         }
 
         [McpServerPrompt(Name = "UpdateHmiTag"), Description("Change connection, PLC path, data type or cycle of one HMI tag")]
-        public static string UpdateHmiTag(string softwarePath, string tagName, string connection = "", string plcTag = "", string dataType = "", string acquisitionCycle = "", string dryRun = "true")
+        public static string UpdateHmiTag(string softwarePath, string tagName, string connection = "", string plcTag = "", string dataType = "", string acquisitionCycle = "", string attributes = "", string dryRun = "true")
         {
             return $@"Change one HMI tag of a WinCC Unified device; an empty value keeps the current one (requires the server started with '--allow-write').
 
@@ -98,6 +98,7 @@ Common parameter values:
 - plcTag: new PLC path, empty keeps it
 - dataType: new data type of an internal tag, empty keeps it
 - acquisitionCycle: new acquisition cycle, empty keeps it
+- attributes: further properties as 'Name=Value;...', e.g. 'InitialValue=0;LinearScaling=true', empty keeps them
 - dryRun: true only reports, false writes
 
 Use the UpdateHmiTag tool with these parameters:
@@ -107,6 +108,7 @@ Use the UpdateHmiTag tool with these parameters:
 - plcTag: {plcTag}
 - dataType: {dataType}
 - acquisitionCycle: {acquisitionCycle}
+- attributes: {attributes}
 - dryRun: {dryRun}";
         }
 

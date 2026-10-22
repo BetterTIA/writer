@@ -127,7 +127,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "UpdateHmiTag", Title = "Update one HMI tag", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Change the connection, PLC path, data type (internal tags) or acquisition cycle of one HMI tag of a WinCC Unified device; an empty value keeps the current one. For many PLC paths at once use SetHmiTagPlcTags, for names RenameHmiTags. Defaults to a dry run that reports old against new. A PLC path TIA Portal does not accept fails the call")]
+         Description("Change the connection, PLC path, data type (internal tags) or acquisition cycle of one HMI tag of a WinCC Unified device, and further properties such as the initial value or the linear scaling; an empty value keeps the current one. For many PLC paths at once use SetHmiTagPlcTags, for names RenameHmiTags. Defaults to a dry run that reports old against new. A PLC path TIA Portal does not accept fails the call")]
         public static ResponseHmiEdit UpdateHmiTag(
             [Description("softwarePath: defines the path in the project structure to the HMI software")] string softwarePath,
             [Description("tagName: name of the HMI tag")] string tagName,
@@ -135,9 +135,10 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("plcTag: new PLC path, e.g. '\"DB_Motors\".Motor1.Speed'; empty keeps it")] string plcTag = "",
             [Description("dataType: new data type of an internal tag; empty keeps it")] string dataType = "",
             [Description("acquisitionCycle: new acquisition cycle, e.g. 'T1s'; empty keeps it")] string acquisitionCycle = "",
+            [Description("attributes: further properties as 'Name=Value' separated by ';', e.g. 'InitialValue=0;LinearScaling=true;PlcStartValue=0;PlcEndValue=27648;HmiStartValue=0;HmiEndValue=100'; empty keeps them")] string attributes = "",
             [Description("dryRun: true (default) only reports the change; false writes it")] bool dryRun = true)
         {
-            return Guarded(nameof(UpdateHmiTag), () => HmiEdited(Portal.UpdateHmiTag(softwarePath, tagName, connection, plcTag, dataType, acquisitionCycle, dryRun), dryRun, "value(s)"));
+            return Guarded(nameof(UpdateHmiTag), () => HmiEdited(Portal.UpdateHmiTag(softwarePath, tagName, connection, plcTag, dataType, acquisitionCycle, attributes, dryRun), dryRun, "value(s)"));
         }
 
         [WriteTool]

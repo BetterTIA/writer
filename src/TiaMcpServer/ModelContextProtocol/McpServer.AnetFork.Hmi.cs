@@ -171,12 +171,12 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "SetHmiItemAttribute", Title = "Set attribute of HMI screen item", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Set one attribute of a screen item of a WinCC Unified device, or of the screen itself: rename it (Name), change a text (Text, ToolTipText - one language), a graphic (Graphic) or any other simple property. Defaults to a dry run that reports the old and the new value")]
+         Description("Set one attribute of a screen item of a WinCC Unified device, or of the screen itself: rename it (Name), change a text (Text, ToolTipText - one language), a graphic (Graphic) or any other simple property. A dotted path reaches into a part, e.g. Font.Size, Font.Weight or Interface.Speed.Value of a faceplate; a colour takes '#RRGGBB' or '#AARRGGBB'. Defaults to a dry run that reports the old and the new value")]
         public static ResponseHmiEdit SetHmiItemAttribute(
             [Description("softwarePath: defines the path in the project structure to the HMI software")] string softwarePath,
             [Description("screenName: name of the screen")] string screenName,
             [Description("itemName: name of the screen item; empty addresses the screen itself")] string itemName,
-            [Description("attribute: name of the attribute as Openness calls it, e.g. Name, Text, Graphic, Visible")] string attribute,
+            [Description("attribute: name of the attribute as Openness calls it, e.g. Name, Text, Graphic, Visible, or a dotted path such as Font.Size")] string attribute,
             [Description("value: the new value")] string value,
             [Description("culture: language of a text attribute, e.g. en-US; may stay empty when the project has one language")] string culture = "",
             [Description("dryRun: true (default) only reports what would change; false sets the attribute")] bool dryRun = true)
