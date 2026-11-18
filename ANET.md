@@ -200,6 +200,32 @@ file (a client that backgrounds long calls still gets the result). Not verified 
 TIA Portal: whether `Archive` accepts the file name with its extension, as the Openness
 documentation shows, and whether a modified project is refused by TIA Portal itself.
 
+## Import safeguards (round 5, unreleased)
+
+- __Stable content hash.__ `ContentHash` format `xml` is computed over a normalized export
+  (`ContentHash.NormalizeXml`): the `DocumentInfo` header (Created, ExportSetting, InstalledProducts)
+  and every element or attribute named `Created` or containing `Modif` (`Modified`,
+  `ParameterModified`, `InterfaceModifiedDate`, `InterfaceModificationDate`, `CodeModifiedDate`,
+  `StructureModified`, ...) are dropped, indentation is dropped, line ends are LF. Two exports of an
+  unchanged block therefore give the same hash, and so does the export `ImportXmlBlock` compares
+  against right before the write. Code, interface and network texts stay in the hash. The names were
+  taken from the SimaticML format, not from a V21 export in this repo: if a hash still differs
+  between two exports, diff the files and add the element to `ContentHash.Volatile`. Hashes made by
+  an earlier build do not match (the format name is still `xml`): export again. The `documents`
+  format is unchanged.
+- __Reason of a failed write.__ A tool error ends with `errorDetail: ["outer", "inner", ...]`
+  (`ErrorDetail.Append`): every message of the exception chain, without repeats. `ImportXmlBlock`
+  and `ImportXmlType` no longer return a bare "Failed importing" when Openness throws, and
+  `ImportFromDocuments` adds the state and messages of `DocumentImportResult`.
+  `ImportBlocksFromDocuments` and the source imports list the reason per file in
+  `Meta.errorDetail` and `Failures`.
+- __HMI text lists.__ `ExportHmiTextLists` takes `dryRun` (false by default, so nothing changes for
+  existing callers) and both text list tools refuse a folder that is not absolute. The dry run of
+  `ImportHmiTextLists` names the text lists the device has now and says the import replaces lists
+  of the same name; it does not read the file (its format is not verified).
+- __Counts.__ `Test15ImportSafeguards` compares the README 'Read-only tools (N)' with the tools the
+  server registers without `--allow-write` (66 now).
+
 ## Write safeguards (0.2.3.0)
 
 Three checks every write runs through, modelled on Czarnak/tia-portal-mcp (MIT):
@@ -389,7 +415,7 @@ member, and import of fail-safe blocks.
 ## Running the tests that need no TIA Portal
 
 ```powershell
-dotnet test tests/TiaMcpServer.Test/TiaMcpServer.Test.csproj -c Release --filter "FullyQualifiedName~Test7ToolRegistration|FullyQualifiedName~Test8SourceFileEncoding|FullyQualifiedName~Test9SimaticMl"
+dotnet test tests/TiaMcpServer.Test/TiaMcpServer.Test.csproj -c Release --filter "FullyQualifiedName~Test7ToolRegistration|FullyQualifiedName~Test8SourceFileEncoding|FullyQualifiedName~Test9SimaticMl|FullyQualifiedName~Test10Hardware|FullyQualifiedName~Test11Safeguards|FullyQualifiedName~Test12Archive|FullyQualifiedName~Test13HmiSpecs|FullyQualifiedName~Test14HmiScreenSpecs|FullyQualifiedName~Test15"
 ```
 
 Do not run the unfiltered suite on a machine where a real project is open: the other test classes

@@ -67,11 +67,11 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (PortalException pex)
             {
-                throw new McpException(pex.Message, pex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append(pex.Message, pex), pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error in '{toolName}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error in '{toolName}': {ex.Message}", ex), ex);
             }
         }
 

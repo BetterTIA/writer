@@ -218,9 +218,9 @@ namespace TiaMcpServer.Siemens
                             }
                         }
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
-                        return false;
+                        throw new PortalException(PortalErrorCode.ImportFailed, $"TIA Portal refused to import '{importPath}': {ex.Message}", null, ex);
                     }
                 }
             }

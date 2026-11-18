@@ -1063,7 +1063,7 @@ namespace TiaMcpServer.Siemens
                 }
                 catch (Exception ex)
                 {
-                    result.Failures.Add($"{name}{extension}: {ex.Message}");
+                    result.Failures.Add($"{name}{extension}: {string.Join(" | ", ErrorDetail.Chain(ex))}");
                     _logger?.LogWarning(ex, "Could not import source '{File}'", file);
                 }
             }

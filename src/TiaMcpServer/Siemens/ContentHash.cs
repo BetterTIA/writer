@@ -2,7 +2,9 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 
 namespace TiaMcpServer.Siemens
 {
@@ -46,6 +48,50 @@ namespace TiaMcpServer.Siemens
                 return $"{format}:sha256:{BitConverter.ToString(sha.Hash).Replace("-", string.Empty).ToLowerInvariant()}";
             }
         }
+
+        /// <summary>
+        /// Elements and attributes left out of an 'xml' hash because TIA Portal rewrites them on
+        /// every export without the block changing: the DocumentInfo header (Created, export
+        /// settings, installed products) and every element or attribute named Created or
+        /// containing 'Modif' (Modified, ParameterModified, InterfaceModifiedDate,
+        /// CodeModifiedDate, StructureModified, ...). The rest of the XML, code and interface
+        /// included, stays in. shortcut: matched by name over the whole document, so a user
+        /// attribute that happens to be called like that is ignored too; narrow it when seen.
+        /// </summary>
+        private static readonly Regex Volatile = new Regex("^(Created|DocumentInfo|[A-Za-z]*Modif[A-Za-z]*)$", RegexOptions.Compiled);
+
+        /// <summary>The XML of an export without the volatile parts, no indentation, LF line ends.</summary>
+        public static byte[] NormalizeXml(byte[] xml)
+        {
+            try
+            {
+                XDocument doc;
+                using (var stream = new MemoryStream(xml))
+                {
+                    doc = XDocument.Load(stream, LoadOptions.None);
+                }
+
+                foreach (var element in doc.Descendants().Where(e => Volatile.IsMatch(e.Name.LocalName)).ToList())
+                {
+                    element.Remove();
+                }
+
+                foreach (var attribute in doc.Descendants().Attributes().Where(a => Volatile.IsMatch(a.Name.LocalName)).ToList())
+                {
+                    attribute.Remove();
+                }
+
+                return Encoding.UTF8.GetBytes(doc.ToString(SaveOptions.DisableFormatting).Replace("\r\n", "\n"));
+            }
+            catch (System.Xml.XmlException)
+            {
+                // Not XML after all: hash the text as it is, only with the line ends unified.
+                return Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(xml).Replace("\r\n", "\n"));
+            }
+        }
+
+        /// <summary>The 'xml' hash of an exported file, over its normalized content.</summary>
+        public static string OfXmlFile(string path) => OfBytes(Xml, NormalizeXml(File.ReadAllBytes(path)));
 
         /// <summary>A file that does not exist counts as empty (a block without texts has no .s7res).</summary>
         public static string OfFiles(string format, params string[] paths) =>

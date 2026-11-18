@@ -53,7 +53,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving type info from '{typePath}' in '{softwarePath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error retrieving type info from '{typePath}' in '{softwarePath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -108,7 +108,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving user defined types with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error retrieving user defined types with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -162,7 +162,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error exporting type from '{typePath}' to '{exportPath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error exporting type from '{typePath}' to '{exportPath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -193,7 +193,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error importing type from '{importPath}' to '{groupPath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error importing type from '{importPath}' to '{groupPath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -332,7 +332,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 progress.Report(new ProgressNotificationValue { Progress = 0, Total = 0, Message = $"Type export failed: {ex.Message}" });
                 
                 Logger?.LogError(ex, $"Failed exporting types '{regexName}' from '{softwarePath}' to {exportPath}");
-                throw new McpException($"Unexpected error exporting types '{regexName}' from '{softwarePath}' to {exportPath}: {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error exporting types '{regexName}' from '{softwarePath}' to {exportPath}: {ex.Message}", ex), ex);
             }
         }
 

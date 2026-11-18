@@ -247,9 +247,10 @@ namespace TiaMcpServer.Siemens
                         }
 
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
-                        return false;
+                        // The reason is in Openness' inner exception; the tool prints the chain (ErrorDetail).
+                        throw new PortalException(PortalErrorCode.ImportFailed, $"TIA Portal refused to import '{importPath}': {ex.Message}", null, ex);
                     }
                 }
             }

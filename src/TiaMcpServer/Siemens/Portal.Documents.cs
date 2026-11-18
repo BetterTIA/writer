@@ -867,16 +867,27 @@ namespace TiaMcpServer.Siemens
                     {
                         return true;
                     }
+
+                    var detail = DescribeImportMessages(result);
+
+                    throw new PortalException(PortalErrorCode.ImportFailed,
+                        $"TIA Portal reported '{result?.State.ToString() ?? "no result"}' importing '{fileNameWithoutExtension}'. " +
+                        (detail.Length > 0 ? detail : "No further detail was returned."));
                 }
+            }
+            catch (PortalException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Error importing block from documents");
+                throw new PortalException(PortalErrorCode.ImportFailed, $"Importing '{fileNameWithoutExtension}' from documents failed: {ex.Message}", null, ex);
             }
             return false;
         }
 
-        public IEnumerable<PlcBlock>? ImportBlocksFromDocuments(string softwarePath, string groupPath, string importPath, string regexName, ImportDocumentOptions option, bool preservePath = false)
+        public IEnumerable<PlcBlock>? ImportBlocksFromDocuments(string softwarePath, string groupPath, string importPath, string regexName, ImportDocumentOptions option, bool preservePath = false, List<string>? failures = null)
         {
             _logger?.LogInformation($"Importing blocks from documents in {importPath} with regex '{regexName}'");
 
@@ -926,6 +937,11 @@ namespace TiaMcpServer.Siemens
                                 ? group.Blocks.ImportFromDocuments(dir, name, option)
                                 : plcSoftware.BlockGroup.Blocks.ImportFromDocuments(dir, name, option);
 
+                            if (result != null && result.State != DocumentResultState.Success)
+                            {
+                                failures?.Add($"{name}: {result.State}. {DescribeImportMessages(result)}".Trim());
+                            }
+
                             if (result != null && result.State == DocumentResultState.Success && result.ImportedPlcBlocks != null)
                             {
                                 foreach (var blk in result.ImportedPlcBlocks)
@@ -937,13 +953,10 @@ namespace TiaMcpServer.Siemens
                                 }
                             }
                         }
-                        catch (EngineeringNotSupportedException)
+                        catch (Exception ex)
                         {
-                            // mixed languages etc.; skip but continue batch
-                        }
-                        catch (Exception)
-                        {
-                            // skip problematic item, continue
+                            // mixed languages etc.; skip but continue batch, the reason goes back to the caller
+                            failures?.Add($"{name}: {string.Join(" | ", ErrorDetail.Chain(ex))}");
                         }
                     }
                 }

@@ -19,6 +19,16 @@
 - `CreateHmiScreen` takes event scripts and creates missing screen groups; `UpdateHmiTag` takes
   further properties as `Name=Value;...` (initial value, linear scaling, start and end values).
 
+### Changed (ANet fork, import safeguards)
+
+- `expectedContentHash` is computed over a normalized export (no `Created` and other time stamps),
+  so two exports of an unchanged block give the same hash; hashes from earlier builds must be
+  fetched again.
+- A failed import reports the whole exception chain and Openness' import messages
+  (`errorDetail`) instead of "Failed importing ...".
+- `ExportHmiTextLists` takes `dryRun`; both text list tools refuse a relative folder;
+  the dry run of `ImportHmiTextLists` says what the import replaces.
+
 ### Fixed (ANet fork, 0.2.7.0)
 
 - `SetHmiItemAttribute` converts a colour from `#RRGGBB` (it failed on `System.Drawing.Color`).

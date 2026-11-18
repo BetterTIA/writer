@@ -158,7 +158,7 @@ namespace TiaMcpServer.Siemens
 
                 block.Export(new FileInfo(file), ExportOptions.None);
 
-                return ContentHash.OfFiles(format, file);
+                return ContentHash.OfXmlFile(file);
             }
             finally
             {
@@ -191,7 +191,7 @@ namespace TiaMcpServer.Siemens
                     "state_changed: the owner was not exported, so the expected content hash cannot be compared. Nothing was written.");
             }
 
-            ContentHash.Verify(expectedContentHash, ContentHash.OfFiles(ContentHash.Xml, exported.File.FullName), exported.Info.Path);
+            ContentHash.Verify(expectedContentHash, ContentHash.OfXmlFile(exported.File.FullName), exported.Info.Path);
         }
 
         #endregion

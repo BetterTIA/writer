@@ -58,7 +58,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving block info from '{blockPath}' in '{softwarePath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error retrieving block info from '{blockPath}' in '{softwarePath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -116,7 +116,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving blocks with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error retrieving blocks with regex '{regexName}' in '{softwarePath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -150,7 +150,7 @@ namespace TiaMcpServer.ModelContextProtocol
             catch (Exception ex) when (ex is not McpException)
             {
                 // Generic unexpected failure wrapper
-                throw new McpException($"Unexpected error retrieving block hierarchy for '{softwarePath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error retrieving block hierarchy for '{softwarePath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -172,7 +172,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
                     return new ResponseExportXmlBlock
                     {
-                        ContentHash = ContentHash.OfFiles(ContentHash.Xml, file),
+                        ContentHash = ContentHash.OfXmlFile(file),
                         Message = $"Block exported from '{blockPath}' to '{exportPath}'. Pass ContentHash as expectedContentHash to ImportXmlBlock, SetNetworkText, ReplaceNetworkText or RenameMembers to refuse the write when the block changed in between",
                         Meta = new JsonObject
                         {
@@ -251,7 +251,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error exporting block from '{blockPath}' to '{exportPath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error exporting block from '{blockPath}' to '{exportPath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -333,11 +333,11 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (PortalException pex)
             {
-                throw new McpException(pex.Message, pex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append(pex.Message, pex), pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error importing block from '{importPath}' to '{groupPath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error importing block from '{importPath}' to '{groupPath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -482,7 +482,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 progress.Report(new ProgressNotificationValue { Progress = 0, Total = 0, Message = $"Export failed: {ex.Message}" });
                 
                 Logger?.LogError(ex, $"Failed exporting blocks with '{regexName}' from '{softwarePath}' to {exportPath}");
-                throw new McpException($"Unexpected error exporting blocks with '{regexName}' from '{softwarePath}' to {exportPath}: {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error exporting blocks with '{regexName}' from '{softwarePath}' to {exportPath}: {ex.Message}", ex), ex);
             }
         }
 
@@ -515,11 +515,11 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (PortalException pex)
             {
-                throw new McpException(pex.Message, pex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append(pex.Message, pex), pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error reading the interface of '{blockPath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error reading the interface of '{blockPath}': {ex.Message}", ex), ex);
             }
         }
 

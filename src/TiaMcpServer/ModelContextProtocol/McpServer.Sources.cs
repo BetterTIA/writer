@@ -70,11 +70,11 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (PortalException pex)
             {
-                throw new McpException(pex.Message, pex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append(pex.Message, pex), pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error reading the source of '{objectPath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error reading the source of '{objectPath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -121,11 +121,11 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (PortalException pex)
             {
-                throw new McpException(pex.Message, pex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append(pex.Message, pex), pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error snapshotting '{softwarePath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error snapshotting '{softwarePath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -239,11 +239,11 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (PortalException pex)
             {
-                throw new McpException(pex.Message, pex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append(pex.Message, pex), pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error generating sources for '{softwarePath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error generating sources for '{softwarePath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -273,11 +273,11 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (PortalException pex)
             {
-                throw new McpException(pex.Message, pex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append(pex.Message, pex), pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error exporting {what}: {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error exporting {what}: {ex.Message}", ex), ex);
             }
         }
 
@@ -306,11 +306,11 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (PortalException pex)
             {
-                throw new McpException(pex.Message, pex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append(pex.Message, pex), pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error generating the source of '{objectPath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error generating the source of '{objectPath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -474,7 +474,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving external sources from '{softwarePath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error retrieving external sources from '{softwarePath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -498,7 +498,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving external source info from '{sourcePath}' in '{softwarePath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error retrieving external source info from '{sourcePath}' in '{softwarePath}': {ex.Message}", ex), ex);
             }
         }
 

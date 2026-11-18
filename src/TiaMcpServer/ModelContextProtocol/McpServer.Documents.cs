@@ -56,11 +56,11 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (PortalException pex)
             {
-                throw new McpException(pex.Message, pex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append(pex.Message, pex), pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error exporting '{typePath}' as documents: {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error exporting '{typePath}' as documents: {ex.Message}", ex), ex);
             }
         }
 
@@ -134,13 +134,13 @@ namespace TiaMcpServer.ModelContextProtocol
             {
                 progress.Report(new ProgressNotificationValue { Progress = 0, Total = 0, Message = $"Document export failed: {pex.Message}" });
 
-                throw new McpException(pex.Message, pex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append(pex.Message, pex), pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
                 progress.Report(new ProgressNotificationValue { Progress = 0, Total = 0, Message = $"Document export failed: {ex.Message}" });
 
-                throw new McpException($"Unexpected error exporting PLC data types as documents to '{exportPath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error exporting PLC data types as documents to '{exportPath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -252,13 +252,13 @@ namespace TiaMcpServer.ModelContextProtocol
             {
                 progress.Report(new ProgressNotificationValue { Progress = 0, Total = 0, Message = $"Import failed: {pex.Message}" });
 
-                throw new McpException(pex.Message, pex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append(pex.Message, pex), pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
                 progress.Report(new ProgressNotificationValue { Progress = 0, Total = 0, Message = $"Import failed: {ex.Message}" });
 
-                throw new McpException($"Unexpected error importing PLC data types from '{importPath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error importing PLC data types from '{importPath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -326,7 +326,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error exporting documents from '{blockPath}' to '{exportPath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error exporting documents from '{blockPath}' to '{exportPath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -446,7 +446,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 progress.Report(new ProgressNotificationValue { Progress = 0, Total = 0, Message = $"Document export failed: {ex.Message}" });
                 
                 Logger?.LogError(ex, $"Failed exporting documents to '{exportPath}'");
-                throw new McpException($"Unexpected error exporting documents to '{exportPath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error exporting documents to '{exportPath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -512,11 +512,11 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (PortalException pex)
             {
-                throw new McpException(pex.Message, pex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append(pex.Message, pex), pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error importing from documents: {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error importing from documents: {ex.Message}", ex), ex);
             }
         }
 
@@ -575,7 +575,8 @@ namespace TiaMcpServer.ModelContextProtocol
                 progress.Report(new ProgressNotificationValue { Progress = 0, Total = total, Message = total > 0 ? $"Starting import of {total} blocks from documents..." : "Scanning import directory..." });
 
                 var option = ParseImportDocumentOption(importOption);
-                var imported = await Task.Run(() => Portal.ImportBlocksFromDocuments(softwarePath, groupPath, importPath, regexName, option));
+                var importFailures = new List<string>();
+                var imported = await Task.Run(() => Portal.ImportBlocksFromDocuments(softwarePath, groupPath, importPath, regexName, option, false, importFailures));
 
                 var responseList = new List<ResponseBlockInfo>();
                 int processed = 0;
@@ -622,7 +623,8 @@ namespace TiaMcpServer.ModelContextProtocol
                         ["totalBlocks"] = total,
                         ["importedBlocks"] = processed,
                         ["duration"] = duration,
-                        ["warnings"] = scanWarnings
+                        ["warnings"] = scanWarnings,
+                        ["errorDetail"] = new JsonArray(importFailures.Select(f => (JsonNode)f).ToArray())
                     }
                 };
             }
@@ -631,7 +633,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 progress.Report(new ProgressNotificationValue { Progress = 0, Total = 0, Message = $"Document import failed: {ex.Message}" });
 
                 Logger?.LogError(ex, $"Failed importing documents from '{importPath}'");
-                throw new McpException($"Unexpected error importing documents from '{importPath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error importing documents from '{importPath}': {ex.Message}", ex), ex);
             }
         }
 

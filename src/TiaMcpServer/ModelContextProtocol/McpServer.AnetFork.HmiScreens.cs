@@ -92,10 +92,11 @@ namespace TiaMcpServer.ModelContextProtocol
          Description("Export the text lists of a WinCC Unified device to a file in a folder, as Openness writes it. Openness cannot create a text list or its entries, so a new list is made by editing such a file and importing it with ImportHmiTextLists")]
         public static ResponseHmiEdit ExportHmiTextLists(
             [Description("softwarePath: defines the path in the project structure to the HMI software")] string softwarePath,
-            [Description("folder: absolute folder for the file; created when it does not exist")] string folder,
-            [Description("fileName: name of the file, e.g. TextLists")] string fileName)
+            [Description("folder: absolute folder for the file (a relative one is refused); created when it does not exist")] string folder,
+            [Description("fileName: name of the file, e.g. TextLists")] string fileName,
+            [Description("dryRun: false (default) writes the file; true only reports the target and the existing files it would overwrite, and creates nothing")] bool dryRun = false)
         {
-            return Guarded(nameof(ExportHmiTextLists), () => HmiEdited(Portal.ExportHmiTextLists(softwarePath, folder, fileName), false, "file(s)"));
+            return Guarded(nameof(ExportHmiTextLists), () => HmiEdited(Portal.ExportHmiTextLists(softwarePath, folder, fileName, dryRun), dryRun, "file(s)"));
         }
 
         [WriteTool]

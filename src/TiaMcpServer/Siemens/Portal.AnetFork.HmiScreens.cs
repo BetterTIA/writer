@@ -606,15 +606,45 @@ namespace TiaMcpServer.Siemens
 
         #region hmi text lists and runtime settings
 
-        /// <summary>Exports the text lists of the HMI to a file in <paramref name="folder"/>; returns the files written.</summary>
-        public HmiEditResult ExportHmiTextLists(string softwarePath, string folder, string fileName)
+        /// <summary>A folder named in full (drive or UNC root), not 'x', a rooted 'x' or 'C:x', which would land next to the server's own folder.</summary>
+        public static void RequireAbsoluteFolder(string folder)
+        {
+            if (string.IsNullOrWhiteSpace(folder) || !Path.IsPathRooted(folder) || (Path.GetPathRoot(folder) ?? string.Empty).Length < 3)
+            {
+                throw new PortalException(PortalErrorCode.InvalidParams, $"folder '{folder}' is not an absolute path. Give the full path, e.g. 'C:\\Temp\\TextLists'.");
+            }
+        }
+
+        /// <summary>
+        /// Exports the text lists of the HMI to a file in <paramref name="folder"/>; returns the files written.
+        /// The dry run creates nothing and lists the files of that name that already exist and would be overwritten.
+        /// </summary>
+        public HmiEditResult ExportHmiTextLists(string softwarePath, string folder, string fileName, bool dryRun = false)
         {
             return Operation.Run(_logger, nameof(ExportHmiTextLists), PortalErrorCode.ExportFailed,
                 () =>
                 {
+                    RequireAbsoluteFolder(folder);
+
                     var hmi = GetHmiSoftwareOrThrow(softwarePath);
-                    var directory = Directory.CreateDirectory(folder);
                     var result = new HmiEditResult();
+
+                    if (dryRun)
+                    {
+                        var existing = Directory.Exists(folder) ? Directory.EnumerateFiles(folder, fileName + "*").ToList() : new List<string>();
+
+                        result.Changes.Add(new XmlChange
+                        {
+                            Object = Path.Combine(folder, fileName),
+                            Where = "Export",
+                            Old = existing.Count > 0 ? $"exists, would be overwritten: {string.Join(", ", existing.Select(Path.GetFileName))}" : "does not exist",
+                            New = $"{hmi.HmiTextLists.Count} text list(s)"
+                        });
+
+                        return result;
+                    }
+
+                    var directory = Directory.CreateDirectory(folder);
 
                     foreach (var file in hmi.HmiTextLists.Export(directory, fileName))
                     {
@@ -635,6 +665,8 @@ namespace TiaMcpServer.Siemens
             return Operation.Run(_logger, nameof(ImportHmiTextLists), PortalErrorCode.ImportFailed,
                 () =>
                 {
+                    RequireAbsoluteFolder(folder);
+
                     var hmi = GetHmiSoftwareOrThrow(softwarePath);
 
                     if (!Directory.Exists(folder) || !Directory.EnumerateFiles(folder, fileName + "*").Any())
@@ -645,7 +677,7 @@ namespace TiaMcpServer.Siemens
                     var before = hmi.HmiTextLists.Select(l => l.Name).ToList();
                     var result = new HmiEditResult();
 
-                    result.Changes.Add(new XmlChange { Object = Path.Combine(folder, fileName), Where = "Import", Old = $"{before.Count} text list(s)", New = string.Empty });
+                    result.Changes.Add(new XmlChange { Object = Path.Combine(folder, fileName), Where = "Import", Old = $"{before.Count} text list(s) now: {(before.Count > 0 ? string.Join(", ", before) : "none")}", New = dryRun ? "the import replaces text lists of the same name (which ones the file holds is not read here); lists of other names stay" : string.Empty });
 
                     if (!dryRun)
                     {

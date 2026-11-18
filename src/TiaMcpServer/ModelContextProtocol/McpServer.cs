@@ -83,7 +83,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error connecting to TIA-Portal: {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error connecting to TIA-Portal: {ex.Message}", ex), ex);
             }
         }
 
@@ -111,7 +111,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error disconnecting from TIA-Portal: {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error disconnecting from TIA-Portal: {ex.Message}", ex), ex);
             }
         }
 
@@ -143,7 +143,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error listing TIA-Portal instances: {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error listing TIA-Portal instances: {ex.Message}", ex), ex);
             }
         }
 
@@ -184,7 +184,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving TIA-Portal MCP server state: {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error retrieving TIA-Portal MCP server state: {ex.Message}", ex), ex);
             }
         }
 
@@ -227,7 +227,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error diagnosing the TIA-Portal environment: {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error diagnosing the TIA-Portal environment: {ex.Message}", ex), ex);
             }
         }
 
@@ -272,7 +272,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving open projects: {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error retrieving open projects: {ex.Message}", ex), ex);
             }
         }
 
@@ -324,7 +324,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error opening project '{path}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error opening project '{path}': {ex.Message}", ex), ex);
             }
         }
 
@@ -374,7 +374,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error saving local project/session: {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error saving local project/session: {ex.Message}", ex), ex);
             }
         }
 
@@ -411,7 +411,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error saving local project/session as '{newProjectPath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error saving local project/session as '{newProjectPath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -466,7 +466,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error closing local project/session: {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error closing local project/session: {ex.Message}", ex), ex);
             }
         }
 
@@ -501,7 +501,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving project tree: {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error retrieving project tree: {ex.Message}", ex), ex);
             }
         }
 
@@ -545,7 +545,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error opening '{path}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error opening '{path}': {ex.Message}", ex), ex);
             }
         }
 
@@ -680,11 +680,11 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (PortalException pex)
             {
-                throw new McpException(pex.Message, pex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append(pex.Message, pex), pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error previewing the import of '{importPath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error previewing the import of '{importPath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -763,11 +763,11 @@ namespace TiaMcpServer.ModelContextProtocol
             {
                 // PortalException messages are already written for the caller (what went wrong
                 // and which tool lists the valid paths), so they pass through unchanged.
-                throw new McpException(pex.Message, pex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append(pex.Message, pex), pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error in '{toolName}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error in '{toolName}': {ex.Message}", ex), ex);
             }
         }
 

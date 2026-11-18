@@ -44,7 +44,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving tag tables from '{softwarePath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error retrieving tag tables from '{softwarePath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -68,7 +68,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving tag table info from '{tagTablePath}' in '{softwarePath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error retrieving tag table info from '{tagTablePath}' in '{softwarePath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -92,7 +92,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving tags from '{softwarePath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error retrieving tags from '{softwarePath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -116,7 +116,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving tag info from '{tagPath}' in '{softwarePath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error retrieving tag info from '{tagPath}' in '{softwarePath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -173,7 +173,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving constants from '{softwarePath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error retrieving constants from '{softwarePath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -200,11 +200,11 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (TiaMcpServer.Siemens.PortalException pex)
             {
-                throw new McpException(pex.Message, pex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append(pex.Message, pex), pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error exporting tag table '{tagTablePath}' from '{softwarePath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error exporting tag table '{tagTablePath}' from '{softwarePath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -290,7 +290,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving watch tables from '{softwarePath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error retrieving watch tables from '{softwarePath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -314,7 +314,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving watch table info from '{watchTablePath}' in '{softwarePath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error retrieving watch table info from '{watchTablePath}' in '{softwarePath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -336,7 +336,7 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error retrieving force tables from '{softwarePath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error retrieving force tables from '{softwarePath}': {ex.Message}", ex), ex);
             }
         }
 
@@ -363,11 +363,11 @@ namespace TiaMcpServer.ModelContextProtocol
             }
             catch (TiaMcpServer.Siemens.PortalException pex)
             {
-                throw new McpException(pex.Message, pex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append(pex.Message, pex), pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
-                throw new McpException($"Unexpected error exporting watch table '{watchTablePath}' from '{softwarePath}': {ex.Message}", ex);
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error exporting watch table '{watchTablePath}' from '{softwarePath}': {ex.Message}", ex), ex);
             }
         }
 
