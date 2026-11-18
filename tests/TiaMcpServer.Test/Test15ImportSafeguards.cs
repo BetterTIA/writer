@@ -56,6 +56,14 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
+        public void Test_1501b_XmlHash_SeesAChangeInAccessModifier()
+        {
+            string Doc(string modifier) => "<Document><Engineering version=\"V21\" /><Network><Component Name=\"x\" AccessModifier=\"" + modifier + "\" /></Network></Document>";
+
+            Assert.AreNotEqual(HashOf(Doc("Array")), HashOf(Doc("None")));
+        }
+
+        [TestMethod]
         public void Test_1502_XmlHash_FallsBackToTextForNonXml()
         {
             Assert.AreEqual(HashOf("not xml\r\nline"), HashOf("not xml\nline"));

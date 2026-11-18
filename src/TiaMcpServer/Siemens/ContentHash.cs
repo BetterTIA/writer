@@ -50,15 +50,17 @@ namespace TiaMcpServer.Siemens
         }
 
         /// <summary>
-        /// Elements and attributes left out of an 'xml' hash because TIA Portal rewrites them on
-        /// every export without the block changing: the DocumentInfo header (Created, export
-        /// settings, installed products) and every element or attribute named Created or
-        /// containing 'Modif' (Modified, ParameterModified, InterfaceModifiedDate,
-        /// CodeModifiedDate, StructureModified, ...). The rest of the XML, code and interface
-        /// included, stays in. shortcut: matched by name over the whole document, so a user
-        /// attribute that happens to be called like that is ignored too; narrow it when seen.
+        /// Elements left out of an 'xml' hash because TIA Portal rewrites them on every export
+        /// without the block changing: the DocumentInfo header (Created, export settings,
+        /// installed products) and the date elements of a block's attribute list. An explicit
+        /// list, not a substring match: real content such as the AccessModifier attribute of a
+        /// Component must never drop out. Attributes are never removed. Add a name only after
+        /// two exports of an unchanged block are seen to differ in it.
         /// </summary>
-        private static readonly Regex Volatile = new Regex("^(Created|DocumentInfo|[A-Za-z]*Modif[A-Za-z]*)$", RegexOptions.Compiled);
+        private static readonly System.Collections.Generic.HashSet<string> Volatile = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal)
+        {
+            "Created", "DocumentInfo", "ModifiedDate", "ParameterModified", "InterfaceModifiedDate", "CodeModifiedDate", "StructureModified",
+        };
 
         /// <summary>The XML of an export without the volatile parts, no indentation, LF line ends.</summary>
         public static byte[] NormalizeXml(byte[] xml)
@@ -71,14 +73,9 @@ namespace TiaMcpServer.Siemens
                     doc = XDocument.Load(stream, LoadOptions.None);
                 }
 
-                foreach (var element in doc.Descendants().Where(e => Volatile.IsMatch(e.Name.LocalName)).ToList())
+                foreach (var element in doc.Descendants().Where(e => Volatile.Contains(e.Name.LocalName)).ToList())
                 {
                     element.Remove();
-                }
-
-                foreach (var attribute in doc.Descendants().Attributes().Where(a => Volatile.IsMatch(a.Name.LocalName)).ToList())
-                {
-                    attribute.Remove();
                 }
 
                 return Encoding.UTF8.GetBytes(doc.ToString(SaveOptions.DisableFormatting).Replace("\r\n", "\n"));

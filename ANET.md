@@ -204,9 +204,10 @@ documentation shows, and whether a modified project is refused by TIA Portal its
 
 - __Stable content hash.__ `ContentHash` format `xml` is computed over a normalized export
   (`ContentHash.NormalizeXml`): the `DocumentInfo` header (Created, ExportSetting, InstalledProducts)
-  and every element or attribute named `Created` or containing `Modif` (`Modified`,
-  `ParameterModified`, `InterfaceModifiedDate`, `InterfaceModificationDate`, `CodeModifiedDate`,
-  `StructureModified`, ...) are dropped, indentation is dropped, line ends are LF. Two exports of an
+  and the elements `Created`, `ModifiedDate`, `ParameterModified`, `InterfaceModifiedDate`,
+  `CodeModifiedDate`, `StructureModified` (an explicit list in `ContentHash.Volatile`, no substring
+  match, attributes are never dropped: `AccessModifier` is real content) are dropped, indentation is
+  dropped, line ends are LF. Two exports of an
   unchanged block therefore give the same hash, and so does the export `ImportXmlBlock` compares
   against right before the write. Code, interface and network texts stay in the hash. The names were
   taken from the SimaticML format, not from a V21 export in this repo: if a hash still differs
