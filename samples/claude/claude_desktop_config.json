@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "tiaportal-mcp-compiled": {
-      "command": "<path-to>\\TiaMcpServer.exe",
+      "command": "<path-to>\\BtiaWriter.exe",
       "args": [
           "--tia-major-version",
           "18"

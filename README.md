@@ -134,7 +134,7 @@ command.
 Run the server with `--doctor` to check all of the above without starting the MCP server:
 
 ```text
-> TiaMcpServer.exe --doctor
+> BtiaWriter.exe --doctor
 Diagnose:
 ├─ Connected = False
 ├─ Project: No project open
@@ -291,7 +291,7 @@ These are not gaps in this server - the underlying API offers no operation for t
   {
     "mcpServers": {
       "vscode-tiaportal-mcp": {
-        "command": "<path-to>\\TiaMcpServer.exe",
+        "command": "<path-to>\\BtiaWriter.exe",
         "args": [],
         "env": {}
       }

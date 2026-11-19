@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Executable renamed
+
+- The host is now `BtiaWriter.exe` (+ `BtiaWriter.exe.config`, `AssemblyName` only; `RootNamespace` stays `TiaMcpServer`).
+  Update the `command` path in MCP client configs.
+
 ### Round 6: HMI performance, errors, Formula
 
 - `DeleteHmiTags` takes `checkUsages` (default `true`, unchanged). `false` skips the walk over all

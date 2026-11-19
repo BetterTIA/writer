@@ -21,7 +21,7 @@ namespace TiaMcpServer.Siemens
     /// </summary>
     public sealed class DiagnosticsReport
     {
-        /// <summary>Assembly version of TiaMcpServer.exe, e.g. "0.2.0.0".</summary>
+        /// <summary>Assembly version of BtiaWriter.exe, e.g. "0.2.0.0".</summary>
         public string? ServerVersion { get; set; }
         public bool IsConnected { get; set; }
         public int ActiveTiaMajorVersion { get; set; }
@@ -61,7 +61,7 @@ namespace TiaMcpServer.Siemens
         };
 
         /// <summary>
-        /// Assembly version of TiaMcpServer.exe (AssemblyVersion in TiaMcpServer.csproj). Also
+        /// Assembly version of BtiaWriter.exe (AssemblyVersion in TiaMcpServer.csproj). Also
         /// reported to clients as ServerInfo.Version, so both always show the same value.
         /// </summary>
         public static string ServerVersion =>

@@ -4,7 +4,7 @@ Centralized list of actionable improvements gathered from initial repo review. U
 
 ## Documentation
 - [x] Added a "Command Line Arguments" section to `README.md` documenting `--tia-major-version <int>` and `--logging <1|2|3>` with defaults and effect (1=stderr, 2=Debug, 3=Event Log). Cross-link to samples.
-- [ ] Add a "Build and Run" section to `README.md` showing `dotnet build`, `dotnet run --project src/TiaMcpServer/TiaMcpServer.csproj`, and running compiled `TiaMcpServer.exe`.
+- [ ] Add a "Build and Run" section to `README.md` showing `dotnet build`, `dotnet run --project src/TiaMcpServer/TiaMcpServer.csproj`, and running compiled `BtiaWriter.exe`.
 - [ ] Add a "Testing" section to `README.md` summarizing prerequisites (TIA Portal V20, `.NET Framework 4.8`, env var `TiaPortalLocation`, Windows group membership "Siemens TIA Openness"), how to run `dotnet test`, and expected limitations if environment is not present. Link to `tests/TiaMcpServer.Test/README.md` and mention manual multi-user session creation.
 - [ ] Cross-link the `samples/` directory from `README.md`; reference `samples/vscode/mcp.json` and `samples/claude/claude_desktop_config.json`.
 - [ ] Reduce duplication between `gemini.md` and `src/TiaMcpServer/README.md`: consolidate content or keep one as an overview and link to the other.

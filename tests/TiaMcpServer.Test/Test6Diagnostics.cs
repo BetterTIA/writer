@@ -85,7 +85,7 @@ namespace TiaMcpServer.Test
             Assert.IsTrue(response.Installations!.Any(i => i.MajorVersion == Settings.TiaMajorVersion),
                 $"TIA Portal V{Settings.TiaMajorVersion} missing from the structured content");
             Assert.AreEqual(typeof(McpServer).Assembly.GetName().Version.ToString(), response.ServerVersion,
-                "ResponseDoctor must report the assembly version of TiaMcpServer.exe");
+                "ResponseDoctor must report the assembly version of BtiaWriter.exe");
 
             Console.WriteLine(response.Report);
         }

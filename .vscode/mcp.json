@@ -2,7 +2,7 @@
 	"servers": {
 		"debug-tia-mcp-server": {
 			"type": "stdio",
-			"command": "E:\\Labor\\GitHub\\tiaportal-mcp\\src\\TiaMcpServer\\bin\\Debug\\net48\\TiaMcpServer.exe",
+			"command": "E:\\Labor\\GitHub\\tiaportal-mcp\\src\\TiaMcpServer\\bin\\Debug\\net48\\BtiaWriter.exe",
 			"args": []
 		}
 	},
