@@ -219,7 +219,7 @@ namespace TiaMcpServer.Siemens
                 : tag && spec.Trigger != null ? "a trigger belongs to a script, not a tag"
                 : (spec.Formula != null || spec.FormulaSelected != null) && (script || spec.ResourceList != null) ? "formula and formulaSelected belong to a plain tag dynamization (value converter), not to a script or a resource list"
                 : spec.FormulaSelected == false && spec.Formula != null ? "formula is given while formulaSelected is false"
-                : spec.FormulaSelected == true && string.IsNullOrWhiteSpace(spec.Formula) ? "formulaSelected true needs a formula"
+                : spec.EffectiveFormulaSelected == true && string.IsNullOrWhiteSpace(spec.Formula) ? "a formula turned on needs a non-empty formula"
                 : null;
 
             if (problem != null)

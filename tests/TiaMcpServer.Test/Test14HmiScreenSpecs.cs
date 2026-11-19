@@ -279,7 +279,7 @@ namespace TiaMcpServer.Test
             Assert.IsNull(HmiScreenSpecs.ParseDynamization("T", "d").EffectiveFormulaSelected);
 
             foreach (var bad in new[] { "{\"script\":\"return 1;\",\"formula\":\"x\"}", "{\"tag\":\"T\",\"resourceList\":\"L\",\"formula\":\"x\"}",
-                "{\"tag\":\"T\",\"formula\":\"x\",\"formulaSelected\":false}", "{\"tag\":\"T\",\"formulaSelected\":true}" })
+                "{\"tag\":\"T\",\"formula\":\"x\",\"formulaSelected\":false}", "{\"tag\":\"T\",\"formulaSelected\":true}", "{\"tag\":\"T\",\"formula\":\" \"}" })
             {
                 Assert.ThrowsException<PortalException>(() => HmiScreenSpecs.ParseDynamization(bad, "d"), bad);
             }
