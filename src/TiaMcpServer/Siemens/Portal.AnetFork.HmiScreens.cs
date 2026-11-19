@@ -368,12 +368,13 @@ namespace TiaMcpServer.Siemens
                 var converter = tag.ValueConverter
                     ?? throw new PortalException(PortalErrorCode.NotSupported, "the tag dynamization has no value converter");
 
+                // TIA refuses Formula while the option is off ("the Formula option is deactivated"), so select first.
+                converter.IsFormulaSelected = selected;
+
                 if (spec.Formula != null)
                 {
                     converter.Formula = spec.Formula;
                 }
-
-                converter.IsFormulaSelected = selected;
             }
 
             return null;

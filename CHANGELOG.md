@@ -12,6 +12,8 @@
   (TIA Portal allows it for internal tags only).
 - `SetHmiItemDynamization` / `CreateHmiScreenItems`: a tag dynamization takes `formula` (turns
   the value converter formula on) and `formulaSelected` (explicit on/off).
+- Fix: the formula option is selected before the expression is set; TIA Portal refused the
+  expression while the option was still off ("the Formula option is deactivated").
 
 ### Added (ANet fork, 0.2.7.0)
 
