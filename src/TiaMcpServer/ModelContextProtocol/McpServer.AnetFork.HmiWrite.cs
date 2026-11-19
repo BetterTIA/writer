@@ -143,13 +143,14 @@ namespace TiaMcpServer.ModelContextProtocol
 
         [WriteTool]
         [McpServerTool(Name = "DeleteHmiTags", Title = "Delete HMI tags in a batch", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Delete HMI tags of a WinCC Unified device by name, many in one call. Defaults to a dry run that reports, per tag, the tag dynamizations, script lines and alarms that use it - they are left dangling by the delete. A name that is no tag is reported and skipped")]
+         Description("Delete HMI tags of a WinCC Unified device by name, many in one call. Defaults to a dry run that reports, per tag, the tag dynamizations, script lines and alarms that use it - they are left dangling by the delete. The usage check walks every screen and item through Openness: on a big project it takes minutes and keeps TIA Portal busy (the GUI can freeze), so pass checkUsages=false to skip it (alarms are still checked) - the answer then warns that usages on screens were not checked. A name that is no tag is reported and skipped")]
         public static ResponseHmiBatch DeleteHmiTags(
             [Description("softwarePath: defines the path in the project structure to the HMI software")] string softwarePath,
             [Description("names: tag names separated by ';'")] string names,
-            [Description("dryRun: true (default) only reports the tags and their users; false deletes them")] bool dryRun = true)
+            [Description("dryRun: true (default) only reports the tags and their users; false deletes them")] bool dryRun = true,
+            [Description("checkUsages: true (default) looks for dynamizations and scripts on all screens (slow on big projects); false skips that and checks alarms only")] bool checkUsages = true)
         {
-            return Guarded(nameof(DeleteHmiTags), () => HmiBatch(Portal.DeleteHmiTags(softwarePath, ParseNames(names), dryRun), dryRun, "tag(s)"));
+            return Guarded(nameof(DeleteHmiTags), () => HmiBatch(Portal.DeleteHmiTags(softwarePath, ParseNames(names), dryRun, checkUsages), dryRun, "tag(s)"));
         }
 
         [WriteTool]

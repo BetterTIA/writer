@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Round 6: HMI performance, errors, Formula
+
+- `DeleteHmiTags` takes `checkUsages` (default `true`, unchanged). `false` skips the walk over all
+  screens and items (minutes on a big project, TIA Portal stays busy), checks alarms only and
+  warns that usages on screens were not checked.
+- `UpdateHmiTag`: a refused write names the property and value and carries the `errorDetail`
+  chain; `DataType` / `HmiDataType` on a tag with a connection is refused in the dry run too
+  (TIA Portal allows it for internal tags only).
+- `SetHmiItemDynamization` / `CreateHmiScreenItems`: a tag dynamization takes `formula` (turns
+  the value converter formula on) and `formulaSelected` (explicit on/off).
+
 ### Added (ANet fork, 0.2.7.0)
 
 - __Every WinCC Unified item class__ in `CreateHmiScreenItems`: the type is the Openness class

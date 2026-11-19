@@ -76,7 +76,7 @@ namespace TiaMcpServer.ModelContextProtocol
             [Description("screenName: name of the screen")] string screenName,
             [Description("itemName: name of the screen item; empty addresses the screen itself")] string itemName,
             [Description("property: the property to dynamize, e.g. Visible, BackColor, Font.Size")] string property,
-            [Description("dynamization: a tag name, or JSON {\"tag\":\"X\",\"indirect\":true} or {\"tag\":\"X\",\"resourceList\":\"L\"} or {\"script\":\"return ...;\",\"trigger\":\"T1s\"}; trigger is a TriggerType name such as T100ms, T1s, AutomaticTags")] string dynamization,
+            [Description("dynamization: a tag name, or JSON {\"tag\":\"X\",\"indirect\":true} or {\"tag\":\"X\",\"resourceList\":\"L\"} or {\"script\":\"return ...;\",\"trigger\":\"T1s\"}; trigger is a TriggerType name such as T100ms, T1s, AutomaticTags; a tag dynamization also takes \"formula\":\"x * 0.1\" (turns the value converter formula on) and \"formulaSelected\":false (turns it off)")] string dynamization,
             [Description("dryRun: true (default) only reports what would change; false sets the dynamization")] bool dryRun = true)
         {
             return Guarded(nameof(SetHmiItemDynamization), () =>

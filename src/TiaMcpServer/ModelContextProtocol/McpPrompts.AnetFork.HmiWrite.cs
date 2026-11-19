@@ -113,7 +113,7 @@ Use the UpdateHmiTag tool with these parameters:
         }
 
         [McpServerPrompt(Name = "DeleteHmiTags"), Description("Delete HMI tags by name, in a batch")]
-        public static string DeleteHmiTags(string softwarePath, string names, string dryRun = "true")
+        public static string DeleteHmiTags(string softwarePath, string names, string dryRun = "true", string checkUsages = "true")
         {
             return $@"Delete HMI tags of a WinCC Unified device. Run it with dryRun true first: it lists the dynamizations, scripts and alarms that use each tag (requires the server started with '--allow-write').
 
@@ -121,11 +121,13 @@ Common parameter values:
 - softwarePath: defines the path in the project structure to the HMI software
 - names: tag names separated by ';'
 - dryRun: true only reports, false deletes
+- checkUsages: true (default) searches all screens for users of the tags, which takes minutes on a big project; false skips that and checks alarms only
 
 Use the DeleteHmiTags tool with these parameters:
 - softwarePath: {softwarePath}
 - names: {names}
-- dryRun: {dryRun}";
+- dryRun: {dryRun}
+- checkUsages: {checkUsages}";
         }
 
         [McpServerPrompt(Name = "CreateHmiAlarms"), Description("Create discrete or analog HMI alarms, in a batch")]

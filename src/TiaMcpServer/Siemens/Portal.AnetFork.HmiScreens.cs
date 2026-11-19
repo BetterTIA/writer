@@ -298,7 +298,7 @@ namespace TiaMcpServer.Siemens
 
         /// <summary>What an existing dynamization does, for the report: 'Tag X', 'Script', 'ResourceList X via L'.</summary>
         private static string Describe(DynamizationBase dynamization) =>
-            dynamization is TagDynamization tag ? $"Tag {tag.Tag}"
+            dynamization is TagDynamization tag ? $"Tag {tag.Tag}{HmiDynamizationSpec.FormulaText(tag.ValueConverter?.IsFormulaSelected, tag.ValueConverter?.Formula)}"
             : dynamization is ResourceListDynamization list ? $"ResourceList {list.Tag} via {list.ResourceList}"
             : dynamization.DynamizationType.ToString();
 
@@ -360,6 +360,20 @@ namespace TiaMcpServer.Siemens
             if (spec.Indirect)
             {
                 tag.UseIndirectAddressing = true;
+            }
+
+            if (spec.EffectiveFormulaSelected is bool selected)
+            {
+                // Openness: TagDynamization.ValueConverter.Formula / IsFormulaSelected are writable (V21).
+                var converter = tag.ValueConverter
+                    ?? throw new PortalException(PortalErrorCode.NotSupported, "the tag dynamization has no value converter");
+
+                if (spec.Formula != null)
+                {
+                    converter.Formula = spec.Formula;
+                }
+
+                converter.IsFormulaSelected = selected;
             }
 
             return null;

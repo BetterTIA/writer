@@ -91,5 +91,15 @@ namespace TiaMcpServer.Test
             Assert.AreEqual("<body><p>Pump 1 &lt;stop&gt; &amp; go</p></body>", HmiSpecs.EventTextMarkup("Pump 1 <stop> & go"));
             Assert.AreEqual("<body><p>as is</p></body>", HmiSpecs.EventTextMarkup("<body><p>as is</p></body>"));
         }
+
+        [TestMethod]
+        public void Test_1390_DataTypeRefusal_OnlyBoundTags()
+        {
+            Assert.IsNotNull(HmiSpecs.DataTypeRefusal("PLC_1", "HmiDataType"));
+            Assert.IsNotNull(HmiSpecs.DataTypeRefusal("PLC_1", "DataType"));
+            Assert.IsNull(HmiSpecs.DataTypeRefusal("", "HmiDataType"));
+            Assert.IsNull(HmiSpecs.DataTypeRefusal("<Internal tag>", "DataType"));
+            Assert.IsNull(HmiSpecs.DataTypeRefusal("PLC_1", "InitialValue"));
+        }
     }
 }

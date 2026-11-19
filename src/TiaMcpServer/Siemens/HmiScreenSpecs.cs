@@ -86,11 +86,30 @@ namespace TiaMcpServer.Siemens
         [JsonPropertyName("trigger")]
         public string? Trigger { get; set; }
 
+        /// <summary>
+        /// Formula of the value converter of a tag dynamization (e.g. 'x * 0.1'); giving it turns the
+        /// formula on unless formulaSelected says false.
+        /// </summary>
+        [JsonPropertyName("formula")]
+        public string? Formula { get; set; }
+
+        /// <summary>Switches the formula of the value converter on or off; null keeps it unless a formula is given.</summary>
+        [JsonPropertyName("formulaSelected")]
+        public bool? FormulaSelected { get; set; }
+
+        /// <summary>The state IsFormulaSelected is set to, or null when the spec leaves the converter alone.</summary>
+        [JsonIgnore]
+        public bool? EffectiveFormulaSelected => FormulaSelected ?? (Formula != null ? true : (bool?)null);
+
         /// <summary>Short form for reports: 'tag X', 'script (T1s)'.</summary>
         public override string ToString() =>
             Script != null
                 ? $"script ({Trigger ?? "default trigger"})"
-                : $"tag {Tag}{(Indirect ? " (indirect)" : string.Empty)}{(ResourceList != null ? $" via {ResourceList}" : string.Empty)}";
+                : $"tag {Tag}{(Indirect ? " (indirect)" : string.Empty)}{(ResourceList != null ? $" via {ResourceList}" : string.Empty)}{FormulaText(EffectiveFormulaSelected, Formula)}";
+
+        /// <summary>' with formula ...' for a report, empty when the formula is off or untouched.</summary>
+        public static string FormulaText(bool? selected, string? formula) =>
+            selected == true ? $" with formula '{formula}'" : string.Empty;
     }
 
     /// <summary>
@@ -198,6 +217,9 @@ namespace TiaMcpServer.Siemens
             var problem = spec == null || tag == script ? "give either a tag or a script"
                 : script && (spec.Indirect || spec.ResourceList != null) ? "indirect and resourceList belong to a tag, not a script"
                 : tag && spec.Trigger != null ? "a trigger belongs to a script, not a tag"
+                : (spec.Formula != null || spec.FormulaSelected != null) && (script || spec.ResourceList != null) ? "formula and formulaSelected belong to a plain tag dynamization (value converter), not to a script or a resource list"
+                : spec.FormulaSelected == false && spec.Formula != null ? "formula is given while formulaSelected is false"
+                : spec.FormulaSelected == true && string.IsNullOrWhiteSpace(spec.Formula) ? "formulaSelected true needs a formula"
                 : null;
 
             if (problem != null)

@@ -97,7 +97,7 @@ Common parameter values:
 - screenName: name of the screen
 - itemName: name of the screen item; empty addresses the screen itself
 - property: the property to dynamize, e.g. Visible, BackColor, Font.Size
-- dynamization: a tag name, or JSON with tag (plus indirect or resourceList) or with script (plus trigger, e.g. T1s)
+- dynamization: a tag name, or JSON with tag (plus indirect, resourceList, or formula and formulaSelected) or with script (plus trigger, e.g. T1s)
 - dryRun: true only reports what would change; false sets the dynamization
 
 Use the SetHmiItemDynamization tool with these parameters:

@@ -268,5 +268,21 @@ namespace TiaMcpServer.Test
             Assert.ThrowsException<PortalException>(() => HmiScreenSpecs.ParseEvents("[1]"));
             Assert.AreEqual("42", HmiScreenSpecs.Convert(typeof(object), "42"), "an object-typed value keeps the text");
         }
+
+        [TestMethod]
+        public void Test_1411_ParseDynamization_Formula()
+        {
+            var on = HmiScreenSpecs.ParseDynamization("{\"tag\":\"T\",\"formula\":\"x * 0.1\"}", "d");
+            Assert.AreEqual(true, on.EffectiveFormulaSelected, "a formula turns itself on");
+            StringAssert.Contains(on.ToString(), "formula 'x * 0.1'");
+            Assert.AreEqual(false, HmiScreenSpecs.ParseDynamization("{\"tag\":\"T\",\"formulaSelected\":false}", "d").EffectiveFormulaSelected);
+            Assert.IsNull(HmiScreenSpecs.ParseDynamization("T", "d").EffectiveFormulaSelected);
+
+            foreach (var bad in new[] { "{\"script\":\"return 1;\",\"formula\":\"x\"}", "{\"tag\":\"T\",\"resourceList\":\"L\",\"formula\":\"x\"}",
+                "{\"tag\":\"T\",\"formula\":\"x\",\"formulaSelected\":false}", "{\"tag\":\"T\",\"formulaSelected\":true}" })
+            {
+                Assert.ThrowsException<PortalException>(() => HmiScreenSpecs.ParseDynamization(bad, "d"), bad);
+            }
+        }
     }
 }

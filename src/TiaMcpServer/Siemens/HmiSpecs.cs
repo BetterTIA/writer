@@ -50,6 +50,19 @@ namespace TiaMcpServer.Siemens
     /// </summary>
     public static class HmiSpecs
     {
+        /// <summary>
+        /// Why a data type of an HMI tag cannot be written: TIA Portal changes DataType / HmiDataType only
+        /// of internal tags (no connection, or a placeholder in angle brackets). Null when it can.
+        /// </summary>
+        public static string? DataTypeRefusal(string? connection, string property)
+        {
+            var bound = !string.IsNullOrEmpty(connection) && !connection!.StartsWith("<", StringComparison.Ordinal);
+
+            return bound && (property.Equals("DataType", StringComparison.OrdinalIgnoreCase) || property.Equals("HmiDataType", StringComparison.OrdinalIgnoreCase))
+                ? $"{property} cannot be changed on a tag with the connection '{connection}'; TIA Portal allows it for internal tags only (the data type follows the PLC tag)."
+                : null;
+        }
+
         public static readonly string[] Conditions = { "LowerLimit", "UpperLimit", "Equal", "NotEqual", "LowerLimitOrEqual", "UpperLimitOrEqual" };
 
         public static readonly string[] TriggerModes = { "OnRisingEdge", "OnFallingEdge" };

@@ -446,6 +446,18 @@ namespace TiaMcpServer.Siemens
                         throw new PortalException(PortalErrorCode.InvalidParams, "No change was requested: give connection, plcTag, dataType, acquisitionCycle or attributes.");
                     }
 
+                    var effectiveConnection = sets.Any(x => x.Where == "Connection") ? sets.First(x => x.Where == "Connection").New : tag.Connection;
+
+                    foreach (var (where, _, _, _) in sets)
+                    {
+                        var refusal = HmiSpecs.DataTypeRefusal(effectiveConnection, where);
+
+                        if (refusal != null)
+                        {
+                            throw new PortalException(PortalErrorCode.InvalidParams, $"'{tag.Name}': {refusal}");
+                        }
+                    }
+
                     foreach (var (where, oldValue, newValue, _) in sets)
                     {
                         result.Changes.Add(new XmlChange { Object = tag.Name, Where = where, Old = oldValue, New = newValue });
@@ -456,9 +468,18 @@ namespace TiaMcpServer.Siemens
                         return result;
                     }
 
-                    foreach (var (_, _, _, apply) in sets)
+                    foreach (var (where, _, newValue, apply) in sets)
                     {
-                        apply();
+                        try
+                        {
+                            apply();
+                        }
+                        catch (Exception ex) when (ex is not PortalException)
+                        {
+                            // The reflection setter wraps the Openness error in TargetInvocationException; the
+                            // errorDetail chain of the tool answer then names the real reason.
+                            throw new PortalException(PortalErrorCode.RenameFailed, $"UpdateHmiTag: TIA Portal did not accept {where}='{newValue}' on '{tag.Name}'", null, ex);
+                        }
                     }
 
                     if (!string.IsNullOrWhiteSpace(plcTag) && string.IsNullOrEmpty(tag.PlcTag))
@@ -473,8 +494,12 @@ namespace TiaMcpServer.Siemens
                 ("softwarePath", softwarePath), ("tagName", tagName), ("attributes", attributes), ("dryRun", dryRun));
         }
 
-        /// <summary>Deletes tags by name; the dry run lists where they are used (dynamizations, scripts, alarms).</summary>
-        public HmiWriteResult DeleteHmiTags(string softwarePath, IList<string> names, bool dryRun = true)
+        /// <summary>
+        /// Deletes tags by name; the dry run lists where they are used (dynamizations, scripts, alarms).
+        /// <paramref name="checkUsages"/> false skips the walk over every screen item (minutes on a big project,
+        /// the Openness calls hold TIA Portal busy); alarms are always checked as they are cheap.
+        /// </summary>
+        public HmiWriteResult DeleteHmiTags(string softwarePath, IList<string> names, bool dryRun = true, bool checkUsages = true)
         {
             return Operation.Run(_logger, nameof(DeleteHmiTags), PortalErrorCode.DeleteFailed,
                 () =>
@@ -482,10 +507,15 @@ namespace TiaMcpServer.Siemens
                     var hmi = GetHmiSoftwareOrThrow(softwarePath);
                     var result = new HmiWriteResult();
                     var tags = new List<(HmiTag Tag, HmiWriteItem Item)>();
-                    var spots = AllSpots(hmi).ToList();
+                    var spots = checkUsages ? AllSpots(hmi).ToList() : new List<HmiSpot>();
                     var alarms = hmi.DiscreteAlarms.Select(a => (a.Name, Trigger: a.RaisedStateTag ?? string.Empty, Kind: "discrete"))
                         .Concat(hmi.AnalogAlarms.Select(a => (a.Name, Trigger: a.RaisedStateTag ?? string.Empty, Kind: "analog")))
                         .ToList();
+
+                    if (!checkUsages)
+                    {
+                        result.Warnings.Add(UsagesNotChecked);
+                    }
 
                     foreach (var name in names)
                     {
@@ -556,6 +586,9 @@ namespace TiaMcpServer.Siemens
         }
 
         #endregion
+
+        /// <summary>Warning of a delete made with checkUsages=false.</summary>
+        public const string UsagesNotChecked = "usages on screens were not checked (checkUsages=false): dynamizations and scripts of screen items that use these tags are left dangling unseen; only alarms were checked.";
 
         #region hmi alarms
 
