@@ -136,5 +136,14 @@ namespace TiaMcpServer.Test
             Assert.AreEqual(2, plan.Warnings.Count);
             StringAssert.Contains(plan.Warnings[0], "V2.3.0");
         }
+
+        [TestMethod]
+        public void Test_1209_OpenProjectRules_KeepsSamePathRefusesModifiedOther()
+        {
+            Assert.AreEqual(OpenDecision.Keep, OpenProjectRules.Decide(@"C:\P\a.ap21", true, @"c:\p\.\A.AP21"));
+            Assert.AreEqual(OpenDecision.Refuse, OpenProjectRules.Decide(@"C:\P\a.ap21", true, @"C:\P\b.ap21"));
+            Assert.AreEqual(OpenDecision.Replace, OpenProjectRules.Decide(@"C:\P\a.ap21", false, @"C:\P\b.ap21"));
+            Assert.AreEqual(OpenDecision.Replace, OpenProjectRules.Decide(null, false, @"C:\P\b.ap21"));
+        }
     }
 }

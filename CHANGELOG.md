@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### OpenProject keeps unsaved work
+
+- Fix: `OpenProject` / `OpenTiaProject` closed the open project without saving and reopened it from disk, even for the same path, silently discarding unsaved changes (e.g. an Editor upload). The same path now stays open ("already open"), a different project with unsaved changes is refused, and only an unmodified different one is closed and replaced. `CloseProject` is unchanged (explicit, "Save first").
+
 ### Documents content hash
 
 - Fix: `ExportBlocksAsDocuments` with `preservePath` returned the same `contentHash` for every block: it hashed

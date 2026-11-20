@@ -276,12 +276,35 @@ namespace TiaMcpServer.ModelContextProtocol
             }
         }
 
-        [McpServerTool(Name = "OpenProject", Title = "Open project/session", Destructive = true, Idempotent = true, OpenWorld = false), Description("Open a local project (.apXX) or local session (.alsXX) in the connected TIA Portal and make it the current project. Closes the project or session that is open first. Needs a prior Connect; OpenTiaProject connects and opens in one call")]
+        [McpServerTool(Name = "OpenProject", Title = "Open project/session", Destructive = true, Idempotent = true, OpenWorld = false), Description("Open a local project (.apXX) or local session (.alsXX) in the connected TIA Portal and make it the current project. Keeps it as is when the same path is already open, refuses when a different project has unsaved changes, otherwise closes it first. Needs a prior Connect; OpenTiaProject connects and opens in one call")]
         public static ResponseOpenProject OpenProject(
             [Description("path: full path of the .apXX project or .alsXX session file on the machine running this server")] string path)
         {
             try
             {
+                // Never close a project with unsaved changes, and never reopen the one already open:
+                // both silently discarded the changes made through the Editor.
+                var open = Portal.GetOpenProjectState();
+                var decision = OpenProjectRules.Decide(open?.Path, open?.Modified ?? false, path);
+
+                if (decision == OpenDecision.Refuse)
+                {
+                    throw new McpException($"'{open!.Value.Name}' has unsaved changes; save or close it in TIA Portal first");
+                }
+
+                if (decision == OpenDecision.Keep)
+                {
+                    return new ResponseOpenProject
+                    {
+                        Message = $"Project '{path}' was already open; kept as is",
+                        Meta = new JsonObject
+                        {
+                            ["timestamp"] = DateTime.Now,
+                            ["success"] = true
+                        }
+                    };
+                }
+
                 Portal.CloseProject();
 
                 // get project extension
@@ -510,7 +533,7 @@ namespace TiaMcpServer.ModelContextProtocol
         #region lookup
 
         [McpServerTool(Name = "OpenTiaProject", Title = "Connect/open a project", Destructive = true, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Connect to TIA Portal if not already connected, open the given project or session, and return the 'portalId' plus the device and PLC software paths the other tools need. Replaces the Connect then OpenProject then GetProjectTree sequence")]
+         Description("Connect to TIA Portal if not already connected, open the given project or session, (an already open same path is kept, not reopened; a different project with unsaved changes is refused) and return the 'portalId' plus the device and PLC software paths the other tools need. Replaces the Connect then OpenProject then GetProjectTree sequence")]
         public static async Task<ResponseOpenTiaProject> OpenTiaProject(
             [Description("path: full path of the .apXX project or .alsXX session file on the machine running this server")] string path,
             [Description("portalId: process id of the TIA Portal instance to open it in (see 'GetPortals'). Leave empty when at most one instance is running")] int? portalId = null,
@@ -552,7 +575,7 @@ namespace TiaMcpServer.ModelContextProtocol
         private static ResponseOpenTiaProject OpenAndDescribe(string path, int portalId, bool wasAttached)
         {
             // Reuse the existing tool rather than duplicating its extension validation and
-            // project/session branching; it also closes whatever was open first.
+            // project/session branching; it also decides keep/refuse/replace for the project already open.
             var opened = OpenProject(path);
 
             var softwarePaths = CollectSoftwarePaths();

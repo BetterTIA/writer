@@ -323,6 +323,23 @@ namespace TiaMcpServer.Siemens
             return true;
         }
 
+        /// <summary>Full path, name and unsaved-changes flag of the open project or session; null when none is open.</summary>
+        public (string Path, string Name, bool Modified)? GetOpenProjectState()
+        {
+            if (IsProjectNull())
+            {
+                return null;
+            }
+
+            var project = _project!;
+            string? path = null;
+            try { path = project.Path?.FullName; } catch (Exception) { }
+            bool modified;
+            try { modified = project.IsModified; } catch (Exception) { modified = true; } // unknown: do not discard
+
+            return (path ?? string.Empty, project.Name, modified);
+        }
+
         public bool CloseProject()
         {
             _logger?.LogInformation("Closing project...");
