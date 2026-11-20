@@ -12,12 +12,13 @@ namespace TiaMcpServer.Siemens
     {
         public static OpenDecision Decide(string? openPath, bool openModified, string requestedPath)
         {
-            if (string.IsNullOrEmpty(openPath))
+            if (openPath is null)
             {
                 return OpenDecision.Replace; // nothing open
             }
 
-            if (string.Equals(Path.GetFullPath(openPath), Path.GetFullPath(requestedPath), StringComparison.OrdinalIgnoreCase))
+            // An open project whose path cannot be read ("") counts as a different one, never as nothing open.
+            if (openPath.Length > 0 && string.Equals(Path.GetFullPath(openPath), Path.GetFullPath(requestedPath), StringComparison.OrdinalIgnoreCase))
             {
                 return OpenDecision.Keep;
             }

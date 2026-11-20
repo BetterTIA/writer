@@ -144,6 +144,8 @@ namespace TiaMcpServer.Test
             Assert.AreEqual(OpenDecision.Refuse, OpenProjectRules.Decide(@"C:\P\a.ap21", true, @"C:\P\b.ap21"));
             Assert.AreEqual(OpenDecision.Replace, OpenProjectRules.Decide(@"C:\P\a.ap21", false, @"C:\P\b.ap21"));
             Assert.AreEqual(OpenDecision.Replace, OpenProjectRules.Decide(null, false, @"C:\P\b.ap21"));
+            Assert.AreEqual(OpenDecision.Refuse, OpenProjectRules.Decide("", true, @"C:\P\b.ap21"));
+            Assert.AreEqual(OpenDecision.Replace, OpenProjectRules.Decide("", false, @"C:\P\b.ap21"));
         }
     }
 }
