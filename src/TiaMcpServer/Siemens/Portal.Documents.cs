@@ -672,6 +672,18 @@ namespace TiaMcpServer.Siemens
             return success;
         }
 
+        /// <summary>Pure part of <see cref="GetBlockDocumentsDirectory"/>: the export path plus the group path, '/' as a backslash.</summary>
+        public static string DocumentsDirectory(string exportPath, string? groupPath) =>
+            string.IsNullOrWhiteSpace(groupPath) ? exportPath : Path.Combine(exportPath, groupPath!.Replace('/', '\\'));
+
+        /// <summary>
+        /// The directory ExportBlocksAsDocuments writes a block's .s7dcl/.s7res to. The one source
+        /// for the export and for the content hash; the group path includes the system root
+        /// group ('Program blocks'), unlike the block path.
+        /// </summary>
+        public string GetBlockDocumentsDirectory(string exportPath, PlcBlock block, bool preservePath) =>
+            DocumentsDirectory(exportPath, preservePath && block.Parent is PlcBlockGroup parentGroup ? GetPlcBlockGroupPath(parentGroup) : null);
+
         // TIA portal crashes when exporting blocks as documents, :-(
         public IEnumerable<PlcBlock>? ExportBlocksAsDocuments(string softwarePath, string exportPath, string regexName = "", bool preservePath = false)
         {
@@ -716,15 +728,7 @@ namespace TiaMcpServer.Siemens
                 }
 
                 // Determine base directory (preserve group path if requested)
-                string targetDir = exportPath;
-                if (preservePath && block.Parent is PlcBlockGroup parentGroup)
-                {
-                    var groupPath = GetPlcBlockGroupPath(parentGroup);
-                    if (!string.IsNullOrWhiteSpace(groupPath))
-                    {
-                        targetDir = Path.Combine(exportPath, groupPath.Replace('/', '\\'));
-                    }
-                }
+                var targetDir = GetBlockDocumentsDirectory(exportPath, block, preservePath);
 
                 try
                 {

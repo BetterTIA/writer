@@ -90,9 +90,9 @@ namespace TiaMcpServer.Siemens
         /// <summary>The 'xml' hash of an exported file, over its normalized content.</summary>
         public static string OfXmlFile(string path) => OfBytes(Xml, NormalizeXml(File.ReadAllBytes(path)));
 
-        /// <summary>A file that does not exist counts as empty (a block without texts has no .s7res).</summary>
-        public static string OfFiles(string format, params string[] paths) =>
-            OfBytes(format, paths.Select(p => File.Exists(p) ? File.ReadAllBytes(p) : Array.Empty<byte>()).ToArray());
+        /// <summary>A file that does not exist counts as empty (a block without texts has no .s7res); null when none exists, so no hash of nothing is ever handed out.</summary>
+        public static string? OfFiles(string format, params string[] paths) =>
+            paths.All(p => !File.Exists(p)) ? null : OfBytes(format, paths.Select(p => File.Exists(p) ? File.ReadAllBytes(p) : Array.Empty<byte>()).ToArray());
 
         /// <summary>The format part of a hash, after checking its shape.</summary>
         public static string FormatOf(string hash)
@@ -109,12 +109,12 @@ namespace TiaMcpServer.Siemens
         }
 
         /// <summary>Throws when the object changed since it was exported; the message names the object and both hashes.</summary>
-        public static void Verify(string expected, string actual, string what)
+        public static void Verify(string expected, string? actual, string what)
         {
             if (!string.Equals(expected.Trim(), actual, StringComparison.OrdinalIgnoreCase))
             {
                 throw new PortalException(PortalErrorCode.InvalidState,
-                    $"state_changed: '{what}' changed since it was exported (expected {expected.Trim()}, now {actual}). " +
+                    $"state_changed: '{what}' changed since it was exported (expected {expected.Trim()}, now {actual ?? "no files"}). " +
                     "Nothing was written. Export it again, redo the edit on the fresh export and retry.");
             }
         }

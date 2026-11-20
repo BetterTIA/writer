@@ -72,6 +72,41 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
+        public void Test_1103b_ContentHash_OfFiles_NoFilesNoHash_AndContentDecides()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "tiamcp-test-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+
+            try
+            {
+                var dcl = Path.Combine(directory, "FB_1.s7dcl");
+                var res = Path.Combine(directory, "FB_1.s7res");
+
+                Assert.IsNull(ContentHash.OfFiles(ContentHash.Documents, dcl, res));
+                Assert.ThrowsException<PortalException>(() => ContentHash.Verify(ContentHash.OfBytes(ContentHash.Documents, new byte[1]), null, "FB_1"));
+
+                File.WriteAllText(dcl, "v1");
+                var h1 = ContentHash.OfFiles(ContentHash.Documents, dcl, res);
+                File.WriteAllText(dcl, "v2");
+
+                Assert.IsNotNull(h1);
+                Assert.AreNotEqual(h1, ContentHash.OfFiles(ContentHash.Documents, dcl, res));
+            }
+            finally
+            {
+                Directory.Delete(directory, true);
+            }
+        }
+
+        [TestMethod]
+        public void Test_1103c_DocumentsDirectory_FollowsPreservePathAndSystemRoot()
+        {
+            Assert.AreEqual(@"C:\out", Portal.DocumentsDirectory(@"C:\out", null));
+            Assert.AreEqual(@"C:\out", Portal.DocumentsDirectory(@"C:\out", ""));
+            Assert.AreEqual(@"C:\out\Program blocks\1_Tests", Portal.DocumentsDirectory(@"C:\out", "Program blocks/1_Tests"));
+        }
+
+        [TestMethod]
         public void Test_1104_ContentHash_FormatOf_RejectsMalformedHashes()
         {
             foreach (var bad in new[] { "", "sha256:abc", "xml:md5:" + new string('0', 32), "xml:sha256:" + new string('0', 63), "xml:sha256:" + new string('g', 64) })

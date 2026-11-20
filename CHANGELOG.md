@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Documents content hash
+
+- Fix: `ExportBlocksAsDocuments` with `preservePath` returned the same `contentHash` for every block: it hashed
+  `<exportPath>\<group>\` while the files are written under `<exportPath>\Program blocks\<group>\`, so
+  both files were missing. Export and hash now share one directory helper, and a documents hash over
+  no existing file is no longer produced (`contentHash` is omitted; a comparison against it fails with `state_changed`).
+
 ### Executable renamed
 
 - The host is now `BtiaWriter.exe` (+ `BtiaWriter.exe.config`, `AssemblyName` only; `RootNamespace` stays `TiaMcpServer`).

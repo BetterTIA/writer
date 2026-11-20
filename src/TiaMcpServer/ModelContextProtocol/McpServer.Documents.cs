@@ -310,7 +310,7 @@ namespace TiaMcpServer.ModelContextProtocol
 
                     return new ResponseExportAsDocuments
                     {
-                        ContentHash = DocumentsHash(exportPath, preservePath ? GroupPathOf(blockPath) : string.Empty, name),
+                        ContentHash = DocumentsHash(Portal.DocumentsDirectory(exportPath, preservePath ? GroupPathOf(blockPath) : null), name),
                         Message = $"Documents exported from '{blockPath}' to '{exportPath}'. Pass ContentHash as expectedContentHash to ImportFromDocuments to refuse the write when the block changed in between",
                         Meta = new JsonObject
                         {
@@ -407,7 +407,7 @@ namespace TiaMcpServer.ModelContextProtocol
                                 HeaderName = block.HeaderName,
                                 ModifiedDate = block.ModifiedDate,
                                 IsKnowHowProtected = block.IsKnowHowProtected,
-                                ContentHash = DocumentsHash(exportPath, preservePath ? GroupPathOf(Portal.GetBlockPath(block)) : string.Empty, block.Name),
+                                ContentHash = DocumentsHash(Portal.GetBlockDocumentsDirectory(exportPath, block, preservePath), block.Name),
                                 Attributes = attributes,
                                 Description = block.ToString()
                             });

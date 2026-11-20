@@ -129,7 +129,7 @@ namespace TiaMcpServer.Siemens
         }
 
         /// <summary>The hash of a fresh export of the block in the given format, the export removed again.</summary>
-        private string ExportedContentHash(PlcBlock block, string format)
+        private string? ExportedContentHash(PlcBlock block, string format)
         {
             var directory = CreateTempExportDirectory();
 

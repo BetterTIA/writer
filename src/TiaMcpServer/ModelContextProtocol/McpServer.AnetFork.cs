@@ -349,10 +349,8 @@ namespace TiaMcpServer.ModelContextProtocol
             path.Contains("/") ? path.Substring(0, path.LastIndexOf('/')) : string.Empty;
 
         /// <summary>Hash of the .s7dcl and .s7res files an export as documents wrote for one block.</summary>
-        private static string DocumentsHash(string exportPath, string groupPath, string blockName)
+        private static string? DocumentsHash(string directory, string blockName)
         {
-            var directory = groupPath.Length > 0 ? Path.Combine(exportPath, groupPath.Replace('/', '\\')) : exportPath;
-
             return ContentHash.OfFiles(ContentHash.Documents, Path.Combine(directory, $"{blockName}.s7dcl"), Path.Combine(directory, $"{blockName}.s7res"));
         }
 
