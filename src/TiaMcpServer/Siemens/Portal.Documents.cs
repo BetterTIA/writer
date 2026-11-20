@@ -684,6 +684,10 @@ namespace TiaMcpServer.Siemens
         public string GetBlockDocumentsDirectory(string exportPath, PlcBlock block, bool preservePath) =>
             DocumentsDirectory(exportPath, preservePath && block.Parent is PlcBlockGroup parentGroup ? GetPlcBlockGroupPath(parentGroup) : null);
 
+        /// <summary>The file the ExportXmlBlock/ExportXmlBlocks exports write for a block; the one source for the export and for the content hash.</summary>
+        public string GetBlockXmlFile(string exportPath, PlcBlock block, bool preservePath) =>
+            Path.Combine(GetBlockDocumentsDirectory(exportPath, block, preservePath), $"{block.Name}.xml");
+
         // TIA portal crashes when exporting blocks as documents, :-(
         public IEnumerable<PlcBlock>? ExportBlocksAsDocuments(string softwarePath, string exportPath, string regexName = "", bool preservePath = false)
         {

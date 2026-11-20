@@ -166,9 +166,7 @@ namespace TiaMcpServer.ModelContextProtocol
                 var block = Portal.ExportXmlBlock(softwarePath, blockPath, exportPath, preservePath);
                 if (block is not null)
                 {
-                    var file = preservePath
-                        ? System.IO.Path.Combine(exportPath, GroupPathOf(Portal.GetBlockPath(block)).Replace('/', '\\'), $"{block.Name}.xml")
-                        : System.IO.Path.Combine(exportPath, $"{block.Name}.xml");
+                    var file = Portal.GetBlockXmlFile(exportPath, block, preservePath);
 
                     return new ResponseExportXmlBlock
                     {

@@ -8,6 +8,7 @@
   `<exportPath>\<group>\` while the files are written under `<exportPath>\Program blocks\<group>\`, so
   both files were missing. Export and hash now share one directory helper, and a documents hash over
   no existing file is no longer produced (`contentHash` is omitted; a comparison against it fails with `state_changed`).
+- Fix: `ExportXmlBlock` with `preservePath` hashed `<exportPath>\\<group>\\Name.xml` instead of the file under the system root group and failed with FileNotFoundException after writing the export; export and hash now use one path helper.
 
 ### Executable renamed
 

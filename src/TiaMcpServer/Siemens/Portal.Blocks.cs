@@ -166,20 +166,7 @@ namespace TiaMcpServer.Siemens
                     throw new PortalException(PortalErrorCode.NotFound, "Block not found");
                 }
 
-                if (preservePath)
-                {
-                    var groupPath = "";
-                    if (block.Parent is PlcBlockGroup parentGroup)
-                    {
-                        groupPath = GetPlcBlockGroupPath(parentGroup);
-                    }
-
-                    exportPath = Path.Combine(exportPath, groupPath.Replace('/', '\\'), $"{block.Name}.xml");
-                }
-                else
-                {
-                    exportPath = Path.Combine(exportPath, $"{block.Name}.xml");
-                }
+                exportPath = GetBlockXmlFile(exportPath, block, preservePath);
 
                 // TIA Portal never exports inconsistent blocks
                 if (!block.IsConsistent)
@@ -288,20 +275,7 @@ namespace TiaMcpServer.Siemens
 
                 _logger?.LogDebug($"- Exporting block {k}/{list.Count()} : {block.Name}");
 
-                string path;
-                if (preservePath)
-                {
-                    var groupPath = "";
-                    if (block.Parent is PlcBlockGroup parentGroup)
-                    {
-                        groupPath = GetPlcBlockGroupPath(parentGroup);
-                    }
-                    path = Path.Combine(exportPath, groupPath.Replace('/', '\\'), $"{block.Name}.xml");
-                }
-                else
-                {
-                    path = Path.Combine(exportPath, $"{block.Name}.xml");
-                }
+                var path = GetBlockXmlFile(exportPath, block, preservePath);
 
                 try
                 {
