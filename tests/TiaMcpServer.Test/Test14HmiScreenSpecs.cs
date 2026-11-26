@@ -295,6 +295,8 @@ namespace TiaMcpServer.Test
             Assert.AreEqual(("Columns", (int?)3), HmiScreenSpecs.Indexed("Columns[3]"));
             Assert.AreEqual(("Columns", (int?)null), HmiScreenSpecs.Indexed("Columns"));
             Assert.AreEqual(("Columns[x]", (int?)null), HmiScreenSpecs.Indexed("Columns[x]"), "only a number is a position");
+            Assert.AreEqual(("Columns[-1]", (int?)null), HmiScreenSpecs.Indexed("Columns[-1]"), "no negative position");
+            Assert.AreEqual(("Columns[99999999999]", (int?)null), HmiScreenSpecs.Indexed("Columns[99999999999]"), "past int: no OverflowException");
             Assert.AreEqual("Width", HmiScreenSpecs.PathProperty(typeof(FakeAlarmControl), "AlarmView.Columns[0].Width")!.Name, "D19: column width of an alarm control");
             Assert.AreEqual(typeof(float), HmiScreenSpecs.PathProperty(typeof(FakeAlarmControl), "alarmview.columns[1].header.size")!.PropertyType, "a part of the entry");
             Assert.AreEqual("Width", HmiScreenSpecs.PathProperty(typeof(FakeAlarmControl), "AlarmView.Columns.Event.Width")!.Name, "by name through Find");

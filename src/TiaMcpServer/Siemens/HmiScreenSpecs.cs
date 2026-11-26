@@ -438,7 +438,10 @@ namespace TiaMcpServer.Siemens
         {
             var match = Regex.Match(segment ?? string.Empty, @"^(\w+)\[(\d+)\]$");
 
-            return match.Success ? (match.Groups[1].Value, int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture)) : (segment ?? string.Empty, null);
+            // A position past int stays a plain segment: the caller then reports "has no 'Columns[...]'" instead of an OverflowException.
+            return match.Success && int.TryParse(match.Groups[2].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var index)
+                ? (match.Groups[1].Value, index)
+                : (segment ?? string.Empty, null);
         }
 
         /// <summary>The type of the entries of a list (its int indexer), or null when it is no list.</summary>
