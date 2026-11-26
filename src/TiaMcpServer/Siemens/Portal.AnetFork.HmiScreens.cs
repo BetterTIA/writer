@@ -239,13 +239,25 @@ namespace TiaMcpServer.Siemens
 
             for (var i = 0; i < segments.Length - 1; i++)
             {
-                var property = HmiScreenSpecs.Property(owner.GetType(), segments[i])
-                    ?? throw new PortalException(PortalErrorCode.InvalidParams, $"'{path}': {owner.GetType().Name} has no '{segments[i]}'.");
+                var (segment, index) = HmiScreenSpecs.Indexed(segments[i]);
+                var property = HmiScreenSpecs.Property(owner.GetType(), segment)
+                    ?? throw new PortalException(PortalErrorCode.InvalidParams, $"'{path}': {owner.GetType().Name} has no '{segment}'.");
                 var value = property.GetValue(owner)
-                    ?? throw new PortalException(PortalErrorCode.NotFound, $"'{path}': '{segments[i]}' is empty.");
+                    ?? throw new PortalException(PortalErrorCode.NotFound, $"'{path}': '{segment}' is empty.");
                 var find = HmiScreenSpecs.Find(value.GetType());
 
-                if (find != null && i + 1 < segments.Length - 1)
+                if (index != null)
+                {
+                    // 'AlarmView.Columns[0].Width': a list entry by its position; the error names the entries to choose from.
+                    var list = value as System.Collections.IList
+                        ?? throw new PortalException(PortalErrorCode.InvalidParams, $"'{path}': '{segment}' is no list; [n] works only on a list such as AlarmView.Columns.");
+                    var names = list.Cast<object>().Select((entry, n) => $"[{n}] {(entry as IEngineeringObject)?.GetAttribute("Name")}");
+
+                    value = index.Value < list.Count
+                        ? list[index.Value]!
+                        : throw new PortalException(PortalErrorCode.NotFound, $"'{path}': '{segment}' has {list.Count} entries: {string.Join(", ", names)}.");
+                }
+                else if (find != null && i + 1 < segments.Length - 1)
                 {
                     i++;
                     value = find.Invoke(value, new object[] { segments[i] })

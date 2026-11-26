@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Round 12: alarm control columns
+
+- `SetHmiItemAttribute` (and the dotted paths of `CreateHmiScreenItems` / `SetHmiItemDynamization`)
+  reach a list entry by its position: `AlarmView.Columns[0].Width`, `AlarmView.Columns[2].Visible`,
+  `AlarmView.Columns[0].Header.Text` (multilingual, with `culture`). Openness V21 exposes the
+  columns of an alarm control as `HmiAlarmControl.AlarmView` (`HmiDataGridViewPart`) `.Columns`
+  (`HmiDataGridColumnPartBaseComposition`: indexer, `Find(name)`, no `Create`) of
+  `HmiAlarmColumnPart` (`Name`, `Width`, `MinimumWidth`, `MaximumWidth`, `Visible`, `AlarmBlock`,
+  `SortOrder`, `SortDirection`, `Header.Text`, ...); `AlarmView.Columns.<name>.Width` already
+  worked through `Find`. A position past the end lists the columns with their names. Columns
+  cannot be added or removed through Openness. Not verified against TIA Portal.
+
 ### Round 7: compile recovery, HMI batches and texts, silent zeros
 
 - `CompileSoftware` (no rebuild in Openness): Openness V21 offers only the parameterless

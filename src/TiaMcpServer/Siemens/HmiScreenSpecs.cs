@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace TiaMcpServer.Siemens
 {
@@ -394,11 +395,24 @@ namespace TiaMcpServer.Siemens
 
             for (var i = 0; ; i++)
             {
-                var property = Property(type, segments[i]);
+                var (name, index) = Indexed(segments[i]);
+                var property = Property(type, name);
 
                 if (property == null || i == segments.Length - 1)
                 {
-                    return property;
+                    return index == null ? property : null;
+                }
+
+                if (index != null)
+                {
+                    type = Element(property.PropertyType);
+
+                    if (type == null)
+                    {
+                        return null;
+                    }
+
+                    continue;
                 }
 
                 var find = Find(property.PropertyType);
@@ -414,6 +428,22 @@ namespace TiaMcpServer.Siemens
 
         /// <summary>The Find(string) of a composition, or null for a plain object.</summary>
         public static MethodInfo? Find(Type type) => type.GetMethod("Find", new[] { typeof(string) });
+
+        /// <summary>
+        /// A path segment with a position, 'Columns[0]', as ("Columns", 0); any other segment as (segment, null).
+        /// Openness compositions such as AlarmView.Columns of an alarm control are lists; a position reaches an
+        /// entry by its order, while 'Columns.Name' reaches it through Find by its name.
+        /// </summary>
+        public static (string Name, int? Index) Indexed(string segment)
+        {
+            var match = Regex.Match(segment ?? string.Empty, @"^(\w+)\[(\d+)\]$");
+
+            return match.Success ? (match.Groups[1].Value, int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture)) : (segment ?? string.Empty, null);
+        }
+
+        /// <summary>The type of the entries of a list (its int indexer), or null when it is no list.</summary>
+        public static Type? Element(Type type) =>
+            type.GetProperties().FirstOrDefault(p => p.GetIndexParameters().Select(x => x.ParameterType).SequenceEqual(new[] { typeof(int) }))?.PropertyType;
 
         /// <summary>The enum the EventHandlers composition of the type creates from, or null when the type has none.</summary>
         public static Type? EventType(Type itemType)

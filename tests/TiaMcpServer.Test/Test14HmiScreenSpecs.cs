@@ -67,6 +67,27 @@ namespace TiaMcpServer.Test
             public FakeInterfaceEntry? Find(string name) => null;
         }
 
+        private sealed class FakeColumn
+        {
+            public uint Width { get; set; }
+            public FakeFont Header { get; } = new FakeFont();
+        }
+
+        private sealed class FakeColumns : System.Collections.Generic.List<FakeColumn>
+        {
+            public FakeColumn? Find(string name) => null;
+        }
+
+        private sealed class FakeGrid
+        {
+            public FakeColumns Columns { get; } = new FakeColumns();
+        }
+
+        private sealed class FakeAlarmControl
+        {
+            public FakeGrid AlarmView { get; } = new FakeGrid();
+        }
+
         private sealed class FakeFaceplate
         {
             public FakeInterface Interface { get; } = new FakeInterface();
@@ -266,6 +287,19 @@ namespace TiaMcpServer.Test
                 var ex = Assert.ThrowsException<PortalException>(() => HmiScreenSpecs.ParseDynamization(bad, "d"), bad);
                 Assert.AreEqual(PortalErrorCode.InvalidParams, ex.Code, bad);
             }
+        }
+
+        [TestMethod]
+        public void Test_1412_PathProperty_ListEntryByPosition()
+        {
+            Assert.AreEqual(("Columns", (int?)3), HmiScreenSpecs.Indexed("Columns[3]"));
+            Assert.AreEqual(("Columns", (int?)null), HmiScreenSpecs.Indexed("Columns"));
+            Assert.AreEqual(("Columns[x]", (int?)null), HmiScreenSpecs.Indexed("Columns[x]"), "only a number is a position");
+            Assert.AreEqual("Width", HmiScreenSpecs.PathProperty(typeof(FakeAlarmControl), "AlarmView.Columns[0].Width")!.Name, "D19: column width of an alarm control");
+            Assert.AreEqual(typeof(float), HmiScreenSpecs.PathProperty(typeof(FakeAlarmControl), "alarmview.columns[1].header.size")!.PropertyType, "a part of the entry");
+            Assert.AreEqual("Width", HmiScreenSpecs.PathProperty(typeof(FakeAlarmControl), "AlarmView.Columns.Event.Width")!.Name, "by name through Find");
+            Assert.IsNull(HmiScreenSpecs.PathProperty(typeof(FakeAlarmControl), "AlarmView.Columns[0]"), "an entry is no property");
+            Assert.IsNull(HmiScreenSpecs.PathProperty(typeof(FakeLabel), "Font[0].Size"), "a part is no list");
         }
 
         [TestMethod]
