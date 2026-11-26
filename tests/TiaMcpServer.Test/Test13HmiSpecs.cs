@@ -97,8 +97,17 @@ namespace TiaMcpServer.Test
         {
             // D7a: TIA Portal refuses <p>a</p><p>b</p>; only one paragraph with <br/> passes.
             Assert.AreEqual("<body><p>a<br/>b<br/>c<br/>d</p></body>", HmiSpecs.TextMarkup("a\nb\r\nc\rd"));
-            Assert.AreEqual("<body><p></p></body>", HmiSpecs.TextMarkup(string.Empty));
+            Assert.AreEqual(string.Empty, HmiSpecs.TextMarkup(string.Empty), "the empty text clears the text, as before");
             Assert.AreEqual("  <body><p>x</p></body>", HmiSpecs.TextMarkup("  <body><p>x</p></body>"), "markup is left alone");
+        }
+
+        [TestMethod]
+        public void Test_1309_TextMarkup_BrInPlainTextIsALineBreakNotALiteral()
+        {
+            // Proposals carry line breaks as <br/>; escaped they would show as "<br/>" on the HMI.
+            Assert.AreEqual("<body><p>Servis<br/>pozice<br/>a<br/>b</p></body>", HmiSpecs.TextMarkup("Servis<br/>pozice<BR>a<br />b"));
+            Assert.AreEqual("<body><p>1 &lt; 2<br/>x</p></body>", HmiSpecs.TextMarkup("1 < 2<br/>x"));
+            Assert.IsNull(HmiSpecs.TextMarkupProblem(HmiSpecs.TextMarkup("a<br/>b")));
         }
 
         [TestMethod]

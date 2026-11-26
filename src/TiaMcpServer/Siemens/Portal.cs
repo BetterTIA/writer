@@ -805,7 +805,11 @@ namespace TiaMcpServer.Siemens
         /// transaction after one of its calls threw ("Commit of a Transaction is not allowed after
         /// an exception"), so a batch that catches such an exception per item must stop instead.
         /// </summary>
-        public bool InTransactionNow { get; private set; }
+        public bool InTransactionNow { get => _inTransactionNow; private set => _inTransactionNow = value; }
+
+        // Per thread: a concurrent tool call that writes without a transaction must not see another call's one.
+        [ThreadStatic]
+        private static bool _inTransactionNow;
 
         /// <summary>
         /// Runs <paramref name="body"/> inside a named transaction when TIA Portal allows one.

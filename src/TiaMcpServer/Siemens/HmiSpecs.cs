@@ -235,16 +235,20 @@ namespace TiaMcpServer.Siemens
         /// WinCC Unified stores multilingual texts (screen item texts, alarm event texts) as
         /// markup and refuses plain text ("invalid format"). Plain text is escaped and wrapped the
         /// way TIA Portal writes it: one paragraph, line breaks as &lt;br/&gt; - TIA Portal refuses
-        /// a second &lt;p&gt;. Text that already starts with '&lt;body' is passed through unchanged.
+        /// a second &lt;p&gt;. A &lt;br/&gt; typed into plain text is a line break too, not a
+        /// literal. Text that already starts with '&lt;body' and the empty text (clears the text,
+        /// as before) are passed through unchanged.
         /// </summary>
         public static string TextMarkup(string text)
         {
-            if (IsMarkup(text))
+            if (text.Length == 0 || IsMarkup(text))
             {
                 return text;
             }
 
-            var escaped = text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+            // Proposals carry line breaks as <br/> (read from exports); escaped they would show as "<br/>" on the HMI.
+            var lines = System.Text.RegularExpressions.Regex.Replace(text, @"<br\s*/?>", "\n", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var escaped = lines.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
 
             return "<body><p>" + escaped.Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", "<br/>") + "</p></body>";
         }

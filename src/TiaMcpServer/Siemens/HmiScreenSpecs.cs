@@ -269,12 +269,6 @@ namespace TiaMcpServer.Siemens
         }
 
         /// <summary>
-        /// Why <paramref name="spec"/> cannot be made from <paramref name="itemType"/> (the
-        /// Openness class of the item), or null when it can. Checks the size, the text, the
-        /// properties and the dynamization targets against the properties of the type, and the
-        /// events against the enum its EventHandlers composition creates from.
-        /// </summary>
-        /// <summary>
         /// The error of a batch that TIA Portal stopped inside its transaction: the item that
         /// failed, why, and that nothing of the batch stays - a transaction cannot be committed
         /// after a TIA Portal call threw, so it is rolled back as a whole.
@@ -289,6 +283,12 @@ namespace TiaMcpServer.Siemens
                    (others.Count == 0 ? string.Empty : $" Refused before writing: {string.Join(" | ", others)}.");
         }
 
+        /// <summary>
+        /// Why <paramref name="spec"/> cannot be made from <paramref name="itemType"/> (the
+        /// Openness class of the item), or null when it can. Checks the size, the text, the
+        /// properties and the dynamization targets against the properties of the type, and the
+        /// events against the enum its EventHandlers composition creates from.
+        /// </summary>
         public static string? Problem(HmiItemSpec spec, Type itemType)
         {
             var round = Property(itemType, "Radius") != null;

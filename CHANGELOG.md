@@ -14,9 +14,14 @@
   safety program, changing its signature; without a login or `password` the message says that TIA
   Portal needs the safety password. Nothing is bypassed. A failed safety login, a wrong path or a
   compile that throws is reported with its cause instead of the generic "Failed compiling software".
+- `CompileSoftware` refuses, compiling nothing, when it would compile the safety program - fail-safe
+  blocks inconsistent, or inconsistent blocks that fail-safe blocks use - unless `allowFailsafe=true`
+  (given only after the operator confirmed the listed blocks by name), like `CompileBlock`.
 - Unified texts: plain text is converted to `<body><p>...</p></body>` with line breaks as `<br/>`
   (TIA Portal refuses plain text and a second `<p>`) in `CreateHmiScreenItems` (`text`) and
   `SetHmiItemAttribute` (multilingual attributes); alarm event texts get the same line breaks.
+  A `<br/>` (`<br>`, `<br />`) in plain text is a line break, not a literal; the empty text stays
+  empty (clears the text, as before).
   Markup is left alone but checked: not well-formed, or not exactly one `<p>` in `<body>`, is
   refused already in the dry run.
 - `CreateHmiScreenItems`: a TIA Portal error on one item inside the transaction no longer ends in
