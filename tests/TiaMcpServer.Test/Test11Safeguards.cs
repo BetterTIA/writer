@@ -243,6 +243,22 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
+        public void Test_1152_CompileSafetyRefusal_WithoutAllowFailsafeNothingIsCompiled()
+        {
+            // ANet never compiles the F-program on its own: only after Honza named the blocks (allowFailsafe=true).
+            var affected = new List<string> { "Safety/F_Main", "Data/DB_Safe (used by fail-safe F_Main)" };
+            var refusal = McpServer.CompileSafetyRefusal("PLC_1", affected, false);
+
+            StringAssert.Contains(refusal, "would compile the safety program (2 block(s): Safety/F_Main, Data/DB_Safe (used by fail-safe F_Main))");
+            StringAssert.Contains(refusal, "nothing was compiled");
+            StringAssert.Contains(refusal, "confirm these blocks by name");
+            StringAssert.Contains(refusal, "allowFailsafe=true");
+            StringAssert.Contains(refusal, "compile in TIA Portal himself");
+            Assert.IsNull(McpServer.CompileSafetyRefusal("PLC_1", affected, true), "confirmed: compile");
+            Assert.IsNull(McpServer.CompileSafetyRefusal("PLC_1", new List<string>(), false), "safety program untouched: compile");
+        }
+
+        [TestMethod]
         public void Test_1151_BlockExportOutcome_NothingExportedIsAnError()
         {
             // R1: in online mode every block failed and the tool reported success with 0 blocks.

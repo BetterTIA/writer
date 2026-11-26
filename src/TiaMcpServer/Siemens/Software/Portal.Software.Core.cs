@@ -96,8 +96,9 @@ namespace TiaMcpServer.Siemens
         /// <summary>
         /// What a compile of the whole PLC software will touch of the safety program, read before
         /// it runs: whether the PLC has one, whether the session is logged on to it, and the
-        /// fail-safe blocks that are inconsistent now - those the compile compiles, which changes
-        /// the safety program and its signature.
+        /// fail-safe blocks that are inconsistent now, plus the inconsistent standard blocks that
+        /// fail-safe blocks use - what the compile compiles of the safety program, which changes
+        /// it and its signature.
         /// </summary>
         public (bool SafetyProgram, bool LoggedOn, List<string> FailsafeInconsistent) SafetyBeforeCompile(string softwarePath)
         {
@@ -117,9 +118,46 @@ namespace TiaMcpServer.Siemens
                         _logger?.LogDebug(ex, "Safety login state could not be read for {SoftwarePath}", softwarePath);
                     }
 
-                    var failsafe = GetBlocks(softwarePath).Where(IsFailsafe).ToList();
+                    var blocks = GetBlocks(softwarePath);
+                    var failsafe = blocks.Where(IsFailsafe).ToList();
+                    var safetyProgram = _safetyBlocks.Count > 0 || failsafe.Count > 0;
+                    var affected = failsafe.Where(b => !b.IsConsistent).Select(GetBlockPath).ToList();
 
-                    return (_safetyBlocks.Count > 0 || failsafe.Count > 0, loggedOn, failsafe.Where(b => !b.IsConsistent).Select(GetBlockPath).ToList());
+                    if (safetyProgram)
+                    {
+                        // An inconsistent standard block the safety program uses (a DB it reads) makes the compile
+                        // cover the safety program too - seen live: CompileBlock failed, only a rebuild helped.
+                        var failsafeNames = new HashSet<string>(failsafe.Select(b => b.Name), StringComparer.OrdinalIgnoreCase);
+
+                        foreach (var block in blocks.Where(b => !b.IsConsistent && !IsFailsafe(b)))
+                        {
+                            try
+                            {
+                                var all = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                                foreach (var source in block.GetService<global::Siemens.Engineering.CrossReference.CrossReferenceService>()?
+                                             .GetCrossReferences(global::Siemens.Engineering.CrossReference.CrossReferenceFilter.AllObjects).Sources.ToList()
+                                         ?? new List<global::Siemens.Engineering.CrossReference.SourceObject>())
+                                {
+                                    CollectReferences(source, all, new HashSet<string>());
+                                }
+
+                                var users = all.Where(failsafeNames.Contains).ToList();
+
+                                if (users.Count > 0)
+                                {
+                                    affected.Add($"{GetBlockPath(block)} (used by fail-safe {string.Join(", ", users)})");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                // Not knowing must not read as "the safety program is not affected".
+                                affected.Add($"{GetBlockPath(block)} (use by fail-safe blocks unknown: {ex.Message})");
+                            }
+                        }
+                    }
+
+                    return (safetyProgram, loggedOn, affected);
                 },
                 ("softwarePath", softwarePath));
         }

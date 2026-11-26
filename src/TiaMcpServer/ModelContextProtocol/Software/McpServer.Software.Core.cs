@@ -54,14 +54,21 @@ namespace TiaMcpServer.ModelContextProtocol
         [McpServerTool(Name = "CompileSoftware", Title = "Compile software", Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
          Description("Compile the PLC software and report every compiler message with the object it belongs to, so errors can be fixed without re-reading the whole PLC. Warnings are reported as a successful compile with detail; only errors fail the call. " +
                      "This is the recovery when CompileBlock leaves blocks inconsistent. Openness offers no 'rebuild all': blocks still inconsistent afterwards are listed (StillInconsistent) and then need Compile > Software (rebuild all) in TIA Portal by hand. " +
-                     "The safety program is compiled with it when fail-safe blocks need it, which needs the safety password: the fail-safe blocks inconsistent before the compile are reported (FailsafeInconsistent)")]
+                     "When the compile would cover the safety program (fail-safe blocks inconsistent, or inconsistent blocks that fail-safe blocks use) it is refused and nothing is compiled, unless allowFailsafe=true; those blocks are listed (FailsafeInconsistent)")]
         public static ResponseCompileSoftware CompileSoftware(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
-            [Description("password: the password of the safety program, needed only when the compile covers it; default: no password")] string password = "")
+            [Description("password: the password of the safety program, needed only when the compile covers it; default: no password")] string password = "",
+            [Description("allowFailsafe: true allows a compile that covers the safety program, which changes its F-signature - only after the operator confirmed the listed blocks by name")] bool allowFailsafe = false)
         {
             try
             {
                 var (safetyProgram, loggedOn, failsafeInconsistent) = Portal.SafetyBeforeCompile(softwarePath);
+
+                if (CompileSafetyRefusal(softwarePath, failsafeInconsistent, allowFailsafe) is string refusal)
+                {
+                    throw new McpException(refusal);
+                }
+
                 var result = Portal.CompileSoftware(softwarePath, password)
                     ?? throw new McpException($"Failed compiling software '{softwarePath}': no project is open.");
                 var stillInconsistent = Portal.InconsistentBlocks(softwarePath);
@@ -120,6 +127,23 @@ namespace TiaMcpServer.ModelContextProtocol
             {
                 throw new McpException($"Unexpected error compiling software '{softwarePath}': {ex.Message}", ex);
             }
+        }
+
+        /// <summary>
+        /// Why CompileSoftware must not run, or null: it would compile the safety program and
+        /// allowFailsafe was not given. Like CompileBlock, the Writer never compiles the
+        /// safety program on its own - the operator confirms the blocks by name or compiles in TIA Portal.
+        /// </summary>
+        public static string? CompileSafetyRefusal(string softwarePath, IList<string> failsafeAffected, bool allowFailsafe)
+        {
+            if (allowFailsafe || failsafeAffected.Count == 0)
+            {
+                return null;
+            }
+
+            return $"Compiling '{softwarePath}' would compile the safety program ({failsafeAffected.Count} block(s): {string.Join(", ", failsafeAffected)}), " +
+                   "which changes its F-signature; nothing was compiled. Honza (the operator) must confirm these blocks by name before a repeat " +
+                   "with allowFailsafe=true, or compile in TIA Portal himself.";
         }
 
         /// <summary>
