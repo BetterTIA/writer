@@ -86,10 +86,30 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
-        public void Test_1306_EventTextMarkup_WrapsPlainTextAndKeepsMarkup()
+        public void Test_1306_TextMarkup_WrapsPlainTextAndKeepsMarkup()
         {
-            Assert.AreEqual("<body><p>Pump 1 &lt;stop&gt; &amp; go</p></body>", HmiSpecs.EventTextMarkup("Pump 1 <stop> & go"));
-            Assert.AreEqual("<body><p>as is</p></body>", HmiSpecs.EventTextMarkup("<body><p>as is</p></body>"));
+            Assert.AreEqual("<body><p>Pump 1 &lt;stop&gt; &amp; go</p></body>", HmiSpecs.TextMarkup("Pump 1 <stop> & go"));
+            Assert.AreEqual("<body><p>as is</p></body>", HmiSpecs.TextMarkup("<body><p>as is</p></body>"));
+        }
+
+        [TestMethod]
+        public void Test_1307_TextMarkup_LineBreaksBecomeBrInOneParagraph()
+        {
+            // D7a: TIA Portal refuses <p>a</p><p>b</p>; only one paragraph with <br/> passes.
+            Assert.AreEqual("<body><p>a<br/>b<br/>c<br/>d</p></body>", HmiSpecs.TextMarkup("a\nb\r\nc\rd"));
+            Assert.AreEqual("<body><p></p></body>", HmiSpecs.TextMarkup(string.Empty));
+            Assert.AreEqual("  <body><p>x</p></body>", HmiSpecs.TextMarkup("  <body><p>x</p></body>"), "markup is left alone");
+        }
+
+        [TestMethod]
+        public void Test_1308_TextMarkupProblem_OneParagraphOnly()
+        {
+            Assert.IsNull(HmiSpecs.TextMarkupProblem("plain text\nwith a line"), "plain text is converted, never refused");
+            Assert.IsNull(HmiSpecs.TextMarkupProblem("<body><p>a<br/>b</p></body>"));
+            Assert.IsNull(HmiSpecs.TextMarkupProblem("<body><p><b>a</b>&nbsp;b &amp; c</p></body>"), "HTML entities do not fail the check");
+            StringAssert.Contains(HmiSpecs.TextMarkupProblem("<body><p>a</p><p>b</p></body>"), "one <p>");
+            StringAssert.Contains(HmiSpecs.TextMarkupProblem("<body>bare</body>"), "one <p>");
+            StringAssert.Contains(HmiSpecs.TextMarkupProblem("<body><p>a</body>"), "not well-formed");
         }
 
         [TestMethod]

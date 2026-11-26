@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Xml;
+using System.Xml.Linq;
 
 namespace TiaMcpServer.Siemens
 {
@@ -230,17 +232,59 @@ namespace TiaMcpServer.Siemens
         }
 
         /// <summary>
-        /// WinCC Unified stores alarm event texts as markup. Plain text is escaped and wrapped the
-        /// way TIA Portal writes it; text that already starts with '&lt;body' is passed through.
+        /// WinCC Unified stores multilingual texts (screen item texts, alarm event texts) as
+        /// markup and refuses plain text ("invalid format"). Plain text is escaped and wrapped the
+        /// way TIA Portal writes it: one paragraph, line breaks as &lt;br/&gt; - TIA Portal refuses
+        /// a second &lt;p&gt;. Text that already starts with '&lt;body' is passed through unchanged.
         /// </summary>
-        public static string EventTextMarkup(string text)
+        public static string TextMarkup(string text)
         {
-            if (text.TrimStart().StartsWith("<body", StringComparison.OrdinalIgnoreCase))
+            if (IsMarkup(text))
             {
                 return text;
             }
 
-            return "<body><p>" + text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;") + "</p></body>";
+            var escaped = text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+
+            return "<body><p>" + escaped.Replace("\r\n", "\n").Replace('\r', '\n').Replace("\n", "<br/>") + "</p></body>";
         }
+
+        /// <summary>
+        /// Why TIA Portal would refuse <paramref name="text"/> as a Unified text, or null. Only
+        /// markup is checked - <see cref="TextMarkup"/> makes plain text valid: the markup must be
+        /// well-formed, start with &lt;body&gt; and hold exactly one &lt;p&gt;.
+        /// </summary>
+        public static string? TextMarkupProblem(string text)
+        {
+            if (!IsMarkup(text))
+            {
+                return null;
+            }
+
+            XElement body;
+
+            try
+            {
+                // HTML entities such as &nbsp; are not XML ones; they must not fail the structure check.
+                body = XElement.Parse(System.Text.RegularExpressions.Regex.Replace(text, "&(?!(?:amp|lt|gt|quot|apos);)[A-Za-z][A-Za-z0-9]*;", "&#160;"));
+            }
+            catch (XmlException ex)
+            {
+                return $"the text markup is not well-formed ({ex.Message})";
+            }
+
+            var elements = body.Elements().ToList();
+
+            if (body.Name.LocalName != "body" || elements.Count != 1 || elements[0].Name.LocalName != "p"
+                || body.Nodes().OfType<XText>().Any(t => !string.IsNullOrWhiteSpace(t.Value)))
+            {
+                return $"TIA Portal accepts one <p> inside <body> only (found {elements.Count} element(s) in <{body.Name.LocalName}>); " +
+                       "join the lines with <br/>, or pass plain text with line breaks and let the Writer convert it";
+            }
+
+            return null;
+        }
+
+        private static bool IsMarkup(string text) => text.TrimStart().StartsWith("<body", StringComparison.OrdinalIgnoreCase);
     }
 }

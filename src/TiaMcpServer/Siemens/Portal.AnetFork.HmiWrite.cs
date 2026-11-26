@@ -719,7 +719,7 @@ namespace TiaMcpServer.Siemens
 
                             if (spec.EventText != null)
                             {
-                                SetText(alarm.EventText, culture, HmiSpecs.EventTextMarkup(spec.EventText), "EventText");
+                                SetText(alarm.EventText, culture, HmiSpecs.TextMarkup(spec.EventText), "EventText");
                             }
 
                             ReadAlarm(alarm, item);
@@ -855,7 +855,7 @@ namespace TiaMcpServer.Siemens
 
                     if (!string.IsNullOrEmpty(eventText))
                     {
-                        result.Changes.Add(new XmlChange { Object = alarm.Name, Where = "EventText", Old = string.Join(" / ", alarm.EventText.Items.Select(i => i.Text)), New = HmiSpecs.EventTextMarkup(eventText) });
+                        result.Changes.Add(new XmlChange { Object = alarm.Name, Where = "EventText", Old = string.Join(" / ", alarm.EventText.Items.Select(i => i.Text)), New = HmiSpecs.TextMarkup(eventText) });
                     }
 
                     if (!string.IsNullOrEmpty(infoText))
@@ -875,7 +875,7 @@ namespace TiaMcpServer.Siemens
 
                     if (!string.IsNullOrEmpty(eventText))
                     {
-                        SetText(alarm.EventText, culture, HmiSpecs.EventTextMarkup(eventText), "EventText");
+                        SetText(alarm.EventText, culture, HmiSpecs.TextMarkup(eventText), "EventText");
                     }
 
                     if (!string.IsNullOrEmpty(infoText))

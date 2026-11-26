@@ -274,6 +274,21 @@ namespace TiaMcpServer.Siemens
         /// properties and the dynamization targets against the properties of the type, and the
         /// events against the enum its EventHandlers composition creates from.
         /// </summary>
+        /// <summary>
+        /// The error of a batch that TIA Portal stopped inside its transaction: the item that
+        /// failed, why, and that nothing of the batch stays - a transaction cannot be committed
+        /// after a TIA Portal call threw, so it is rolled back as a whole.
+        /// </summary>
+        /// <param name="refused">Items the batch had refused before writing, as 'name: cause'.</param>
+        public static string RolledBackBatch(string name, string type, string cause, IEnumerable<string> refused)
+        {
+            var others = refused.ToList();
+
+            return $"'{name}' ({type}) failed: {cause}. TIA Portal does not commit a transaction after one of its calls failed, " +
+                   "so the whole batch was rolled back and no item was created. Fix or drop that item, check the batch with dryRun and call again." +
+                   (others.Count == 0 ? string.Empty : $" Refused before writing: {string.Join(" | ", others)}.");
+        }
+
         public static string? Problem(HmiItemSpec spec, Type itemType)
         {
             var round = Property(itemType, "Radius") != null;
@@ -286,6 +301,11 @@ namespace TiaMcpServer.Siemens
             if (spec.Text != null && Property(itemType, "Text") == null)
             {
                 return $"a {spec.Type} has no text";
+            }
+
+            if (spec.Text != null && HmiSpecs.TextMarkupProblem(spec.Text) is string textProblem)
+            {
+                return $"Text: {textProblem}";
             }
 
             foreach (var name in spec.PropertyValues.Keys)

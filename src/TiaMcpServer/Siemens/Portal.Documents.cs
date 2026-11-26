@@ -688,8 +688,16 @@ namespace TiaMcpServer.Siemens
         public string GetBlockXmlFile(string exportPath, PlcBlock block, bool preservePath) =>
             Path.Combine(GetBlockDocumentsDirectory(exportPath, block, preservePath), $"{block.Name}.xml");
 
+        /// <summary>The failure line of a block skipped as inconsistent: a caller may compile it and export again, so it is no error.</summary>
+        public const string InconsistentNotExported = "inconsistent, not exported (compile it first)";
+
         // TIA portal crashes when exporting blocks as documents, :-(
-        public IEnumerable<PlcBlock>? ExportBlocksAsDocuments(string softwarePath, string exportPath, string regexName = "", bool preservePath = false)
+        /// <param name="failures">
+        /// When given, receives one 'name: cause' line per block that was not exported - in
+        /// online mode TIA Portal refuses every one ("not supported in online mode"), which
+        /// otherwise looks like an export of nothing.
+        /// </param>
+        public IEnumerable<PlcBlock>? ExportBlocksAsDocuments(string softwarePath, string exportPath, string regexName = "", bool preservePath = false, List<string>? failures = null)
         {
             _logger?.LogInformation("Exporting blocks as documents...");
 
@@ -705,7 +713,7 @@ namespace TiaMcpServer.Siemens
             }
 
             var exportList = new List<PlcBlock>();
-            var failures = new List<string>();
+            failures ??= new List<string>();
 
             PlcBlock[] list;
             try
@@ -714,6 +722,7 @@ namespace TiaMcpServer.Siemens
             }
             catch (Exception ex)
             {
+                failures.Add($"the block list of '{softwarePath}' could not be read ({ex.Message})");
                 _logger?.LogError(ex, $"Failed to retrieve block list for {softwarePath}");
                 return exportList;
             }
@@ -727,6 +736,7 @@ namespace TiaMcpServer.Siemens
                 // Skip inconsistent blocks (TIA generally won’t export them)
                 if (!block.IsConsistent)
                 {
+                    failures.Add($"{block.Name}: {InconsistentNotExported}");
                     _logger?.LogWarning($"Skipping inconsistent block {block.Name}");
                     continue;
                 }

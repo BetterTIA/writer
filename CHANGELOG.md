@@ -2,6 +2,34 @@
 
 ## [Unreleased]
 
+### Round 7: compile recovery, HMI batches and texts, silent zeros
+
+- `CompileSoftware` (no rebuild in Openness): Openness V21 offers only the parameterless
+  `ICompilable.Compile()` - no "rebuild all" and no compile option (checked against the V21
+  PublicAPI). The tool stays the recovery when `CompileBlock` leaves blocks inconsistent and now
+  lists the blocks still inconsistent afterwards (`stillInconsistent`), which then need
+  Compile > Software (rebuild all) in TIA Portal by hand.
+- `CompileSoftware` reports the safety program before compiling: `safetyProgram`, and the fail-safe
+  blocks inconsistent before the compile (`failsafeInconsistent`) - what the compile compiles of the
+  safety program, changing its signature; without a login or `password` the message says that TIA
+  Portal needs the safety password. Nothing is bypassed. A failed safety login, a wrong path or a
+  compile that throws is reported with its cause instead of the generic "Failed compiling software".
+- Unified texts: plain text is converted to `<body><p>...</p></body>` with line breaks as `<br/>`
+  (TIA Portal refuses plain text and a second `<p>`) in `CreateHmiScreenItems` (`text`) and
+  `SetHmiItemAttribute` (multilingual attributes); alarm event texts get the same line breaks.
+  Markup is left alone but checked: not well-formed, or not exactly one `<p>` in `<body>`, is
+  refused already in the dry run.
+- `CreateHmiScreenItems`: a TIA Portal error on one item inside the transaction no longer ends in
+  the opaque "Commit of a Transaction is not allowed after an exception"; the call fails with the
+  item name, its type and the cause, says that the whole batch was rolled back, and lists the items
+  refused before writing. The dry run reports the text as it will be written.
+- `ExportBlocksAsDocuments`: when blocks match, none is exported and TIA Portal refused at least one
+  (in online mode it refuses every one) the call fails with the causes and a hint to go offline, instead of a success
+  with 0 blocks; blocks not exported are named as a warning (inconsistent ones only ever as a warning,
+  since the Editor compiles such a block and exports again); a `regexName`
+  that matches nothing says so as a warning. `ExportPlcAsDocuments` lists blocks not exported under
+  `skipped`.
+
 ### OpenProject keeps unsaved work
 
 - Fix: `OpenProject` / `OpenTiaProject` closed the open project without saving and reopened it from disk, even for the same path, silently discarding unsaved changes (e.g. an Editor upload). The same path now stays open ("already open"), a different project with unsaved changes is refused, and only an unmodified different one is closed and replaced. `CloseProject` is unchanged (explicit, "Save first").

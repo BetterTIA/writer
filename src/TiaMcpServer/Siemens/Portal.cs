@@ -801,6 +801,13 @@ namespace TiaMcpServer.Siemens
         #region transactions
 
         /// <summary>
+        /// True while a write runs inside an Openness transaction. TIA Portal refuses to commit a
+        /// transaction after one of its calls threw ("Commit of a Transaction is not allowed after
+        /// an exception"), so a batch that catches such an exception per item must stop instead.
+        /// </summary>
+        public bool InTransactionNow { get; private set; }
+
+        /// <summary>
         /// Runs <paramref name="body"/> inside a named transaction when TIA Portal allows one.
         /// The transaction commits only if the body returns without throwing, so a failed write
         /// rolls back instead of leaving the project half-edited.
@@ -848,7 +855,18 @@ namespace TiaMcpServer.Siemens
 
                 using (transaction)
                 {
-                    var result = body();
+                    T result;
+
+                    InTransactionNow = true;
+
+                    try
+                    {
+                        result = body();
+                    }
+                    finally
+                    {
+                        InTransactionNow = false;
+                    }
 
                     // Only reached when the body did not throw. Without this call the using
                     // block rolls the transaction back on dispose.

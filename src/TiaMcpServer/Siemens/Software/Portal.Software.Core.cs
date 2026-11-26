@@ -10,6 +10,7 @@ using Siemens.Engineering.SW.Types;
 using Siemens.Engineering.SW.WatchAndForceTables;
 using Siemens.Engineering.Safety;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Security;
@@ -40,6 +41,14 @@ namespace TiaMcpServer.Siemens
             return null;
         }
 
+        /// <summary>
+        /// Compiles the PLC software with ICompilable.Compile(), the only compile Openness V21
+        /// offers: there is no 'rebuild all' and no compile option (checked against the V21
+        /// PublicAPI). A safety program is compiled with it when it needs compiling, which TIA
+        /// Portal allows only after the login with the safety password - never bypassed here.
+        /// </summary>
+        /// <returns>The compiler result, or null without a project.</returns>
+        /// <exception cref="PortalException">The path names no PLC software, the safety login failed or the compile threw.</exception>
         public CompilerResult? CompileSoftware(string softwarePath, string password = "")
         {
             _logger?.LogInformation($"Compiling software by path: {softwarePath}");
@@ -51,46 +60,73 @@ namespace TiaMcpServer.Siemens
 
             var softwareContainer = GetSoftwareContainer(softwarePath);
 
+            if (softwareContainer?.Software is not PlcSoftware plcSoftware)
+            {
+                throw new PortalException(PortalErrorCode.NotFound, $"No PLC software found at '{softwarePath}'. 'GetProjectTree' lists them.");
+            }
+
             if (!string.IsNullOrEmpty(password))
             {
-                var deviceItem = softwareContainer?.Parent as DeviceItem;
+                var admin = (softwareContainer.Parent as DeviceItem)?.GetService<SafetyAdministration>();
 
-                var admin = deviceItem?.GetService<SafetyAdministration>();
-                if (admin != null)
+                if (admin != null && !admin.IsLoggedOnToSafetyOfflineProgram)
                 {
-                    if (!admin.IsLoggedOnToSafetyOfflineProgram)
+                    try
                     {
-                        SecureString secString = new NetworkCredential("", password).SecurePassword;
-                        try
-                        {
-                            admin.LoginToSafetyOfflineProgram(secString);
-                        }
-                        catch (Exception)
-                        {
-                            return null; // "Error, login to safety offline program failed";
-                        }
+                        admin.LoginToSafetyOfflineProgram(new NetworkCredential("", password).SecurePassword);
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new PortalException(PortalErrorCode.InvalidParams,
+                            $"Login to the safety program of '{softwarePath}' failed ({ex.Message}); nothing was compiled. Check 'password'.", null, ex);
                     }
                 }
             }
 
-            if (softwareContainer?.Software is PlcSoftware plcSoftware)
+            try
             {
-                try
-                {
-                    ICompilable compileService = plcSoftware.GetService<ICompilable>();
-
-                    CompilerResult result = compileService.Compile();
-
-                    return result;
-                }
-                catch (Exception)
-                {
-                    return null; // "Error, compiling failed";
-                }
+                return plcSoftware.GetService<ICompilable>().Compile();
             }
-
-            return null; // "Error";
+            catch (Exception ex)
+            {
+                throw new PortalException(PortalErrorCode.InvalidState, $"Compiling '{softwarePath}' threw: {ex.Message}", null, ex);
+            }
         }
+
+        /// <summary>
+        /// What a compile of the whole PLC software will touch of the safety program, read before
+        /// it runs: whether the PLC has one, whether the session is logged on to it, and the
+        /// fail-safe blocks that are inconsistent now - those the compile compiles, which changes
+        /// the safety program and its signature.
+        /// </summary>
+        public (bool SafetyProgram, bool LoggedOn, List<string> FailsafeInconsistent) SafetyBeforeCompile(string softwarePath)
+        {
+            return Operation.Run(_logger, nameof(SafetyBeforeCompile), PortalErrorCode.InvalidState,
+                () =>
+                {
+                    LoadSafetyBlocks(softwarePath);
+
+                    var loggedOn = false;
+
+                    try
+                    {
+                        loggedOn = (GetSoftwareContainer(softwarePath)?.Parent as DeviceItem)?.GetService<SafetyAdministration>()?.IsLoggedOnToSafetyOfflineProgram ?? false;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogDebug(ex, "Safety login state could not be read for {SoftwarePath}", softwarePath);
+                    }
+
+                    var failsafe = GetBlocks(softwarePath).Where(IsFailsafe).ToList();
+
+                    return (_safetyBlocks.Count > 0 || failsafe.Count > 0, loggedOn, failsafe.Where(b => !b.IsConsistent).Select(GetBlockPath).ToList());
+                },
+                ("softwarePath", softwarePath));
+        }
+
+        /// <summary>Paths of the blocks that are inconsistent right now, fail-safe ones marked.</summary>
+        public List<string> InconsistentBlocks(string softwarePath) =>
+            Operation.Run(_logger, nameof(InconsistentBlocks), PortalErrorCode.InvalidState, () => Inconsistent(softwarePath), ("softwarePath", softwarePath));
 
         #endregion
 

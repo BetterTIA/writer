@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -211,6 +211,62 @@ namespace TiaMcpServer.Test
 
             StringAssert.EndsWith(path, "writer-audit-2026-03.jsonl");
             Assert.IsFalse(path.StartsWith(Directory.GetCurrentDirectory(), StringComparison.OrdinalIgnoreCase));
+        }
+
+        #endregion
+
+        #region silent outcomes (compile, document export)
+
+        [TestMethod]
+        public void Test_1150_CompileNotes_ReportSafetyAndWhatNeedsARebuild()
+        {
+            var none = new List<string>();
+            var fBlocks = new List<string> { "Safety/F_Main", "Safety/F_Valve" };
+            var still = new List<string> { "Line/FB_Station (fail-safe)" };
+
+            Assert.AreEqual(string.Empty, McpServer.CompileNotes(false, false, none, none, false), "no safety program, nothing left: no note");
+            StringAssert.Contains(McpServer.CompileNotes(true, true, none, none, false), "no fail-safe block was inconsistent");
+
+            var safety = McpServer.CompileNotes(true, false, fBlocks, none, false);
+            StringAssert.Contains(safety, "SAFETY: 2 fail-safe block(s)");
+            StringAssert.Contains(safety, "Safety/F_Main, Safety/F_Valve");
+            StringAssert.Contains(safety, "changes its signature");
+            StringAssert.Contains(safety, "safety password");
+            Assert.IsFalse(McpServer.CompileNotes(true, true, fBlocks, none, false).Contains("safety password"), "logged on: no password hint");
+
+            var rebuild = McpServer.CompileNotes(false, false, none, still, false);
+            StringAssert.Contains(rebuild, "still inconsistent after the compile (1): Line/FB_Station (fail-safe)");
+            StringAssert.Contains(rebuild, "rebuild all");
+
+            StringAssert.Contains(McpServer.CompileNotes(true, false, none, none, true), "pass 'password'");
+            Assert.IsFalse(McpServer.CompileNotes(true, true, none, none, true).Contains("pass 'password'"));
+        }
+
+        [TestMethod]
+        public void Test_1151_BlockExportOutcome_NothingExportedIsAnError()
+        {
+            // R1: in online mode every block failed and the tool reported success with 0 blocks.
+            var online = new List<string> { "FB1: not supported (The operation is not supported in online mode)", "FB2: not supported (... online mode)" };
+            var (error, warning) = McpServer.BlockExportOutcome(2, 0, online);
+
+            Assert.IsNull(warning);
+            StringAssert.Contains(error, "None of the 2 matching block(s) was exported");
+            StringAssert.Contains(error, "FB1: not supported");
+            StringAssert.Contains(error, "go offline");
+
+            (error, warning) = McpServer.BlockExportOutcome(3, 2, new List<string> { "FB3: inconsistent, not exported (compile it first)" });
+            Assert.IsNull(error);
+            StringAssert.Contains(warning, "WARNING: 1 block(s) not exported: FB3: inconsistent");
+            Assert.IsFalse(warning!.Contains("offline"));
+
+            Assert.AreEqual((null, null), McpServer.BlockExportOutcome(2, 2, new List<string>()));
+            Assert.AreEqual((null, null), McpServer.BlockExportOutcome(1, 0, new List<string>()));
+
+            // An inconsistent block alone is no error: the Editor compiles it and exports again.
+            (error, warning) = McpServer.BlockExportOutcome(1, 0, new List<string> { $"FB4: {Portal.InconsistentNotExported}" });
+            Assert.IsNull(error);
+            StringAssert.Contains(warning, "FB4: inconsistent");
+            StringAssert.Contains(McpServer.BlockExportOutcome(9, 0, Enumerable.Range(1, 9).Select(i => $"B{i}: x").ToList()).Error, "(4 more)");
         }
 
         #endregion

@@ -414,6 +414,11 @@ namespace TiaMcpServer.Siemens
                             item.Details[geometry.Key] = geometry.Value;
                         }
 
+                        if (spec.Text != null)
+                        {
+                            item.Details["Text"] = HmiSpecs.TextMarkup(spec.Text);
+                        }
+
                         var problem = HmiScreenSpecs.Problem(spec, type)
                             ?? spec.DynamizationSpecs.Values.Select(d => DynamizationProblem(hmi, d)).FirstOrDefault(p => p != null);
 
@@ -452,7 +457,7 @@ namespace TiaMcpServer.Siemens
                                 var text = created.GetAttribute("Text") as MultilingualText
                                     ?? throw new PortalException(PortalErrorCode.NotSupported, $"the Text of a {spec.Type} is no multilingual text");
 
-                                SetText(text, culture, spec.Text, $"{spec.Name}.Text");
+                                SetText(text, culture, HmiSpecs.TextMarkup(spec.Text), $"{spec.Name}.Text");
                             }
 
                             foreach (var dynamization in spec.DynamizationSpecs)
@@ -491,7 +496,17 @@ namespace TiaMcpServer.Siemens
                         }
                         catch (Exception ex) when (ex is EngineeringException || ex is PortalException || ex is ArgumentException || ex is FormatException || ex is OverflowException || ex is InvalidCastException || ex is TargetInvocationException)
                         {
-                            Fail(item, (ex as TargetInvocationException)?.InnerException?.Message ?? ex.Message);
+                            var cause = (ex as TargetInvocationException)?.InnerException?.Message ?? ex.Message;
+
+                            // A TIA Portal exception poisons the transaction: carrying on would end in an opaque
+                            // CommitOnDispose error that names neither the item nor the cause.
+                            if (InTransactionNow && (ex is EngineeringException || ex.InnerException is EngineeringException))
+                            {
+                                throw new PortalException(PortalErrorCode.CreateFailed, HmiScreenSpecs.RolledBackBatch(spec.Name, spec.Type, cause,
+                                    result.Items.Where(i => !i.Ok).Select(i => $"{i.Name}: {i.Message}")));
+                            }
+
+                            Fail(item, cause);
 
                             // Fail closed: a half-made item is removed again.
                             if (created != null)

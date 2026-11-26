@@ -188,6 +188,28 @@ namespace TiaMcpServer.Test
         }
 
         [TestMethod]
+        public void Test_1420_Problem_DryRunCatchesTextMarkupTiaRefuses()
+        {
+            // D18: two paragraphs passed the dry run and failed only inside the transaction.
+            var twoParagraphs = HmiScreenSpecs.ParseItems("[{\"type\":\"Button\",\"name\":\"b\",\"width\":1,\"height\":1,\"text\":\"<body><p>a</p><p>b</p></body>\"}]")[0];
+            var plainLines = HmiScreenSpecs.ParseItems("[{\"type\":\"Button\",\"name\":\"b\",\"width\":1,\"height\":1,\"text\":\"Start\\nPump\"}]")[0];
+
+            StringAssert.Contains(HmiScreenSpecs.Problem(twoParagraphs, typeof(FakeButton)), "one <p>");
+            Assert.IsNull(HmiScreenSpecs.Problem(plainLines, typeof(FakeButton)), "plain text is converted, not refused");
+        }
+
+        [TestMethod]
+        public void Test_1421_RolledBackBatch_NamesItemCauseAndRollback()
+        {
+            var message = HmiScreenSpecs.RolledBackBatch("Btn_3", "Button", "set_Text: invalid format", new[] { "Lbl_1: no HMI tag named 'X' exists" });
+
+            StringAssert.Contains(message, "'Btn_3' (Button) failed: set_Text: invalid format");
+            StringAssert.Contains(message, "no item was created");
+            StringAssert.Contains(message, "Refused before writing: Lbl_1: no HMI tag named 'X' exists");
+            Assert.IsFalse(HmiScreenSpecs.RolledBackBatch("a", "Text", "x", new string[0]).Contains("Refused before writing"));
+        }
+
+        [TestMethod]
         public void Test_1405_Property_FindsTheCanonicalName()
         {
             Assert.AreEqual("BackColor", HmiScreenSpecs.Property(typeof(FakeButton), "backcolor")!.Name);

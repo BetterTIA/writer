@@ -446,3 +446,9 @@ there. A Release build would overwrite, or fail on, the files of the running ser
   XML and document exports, `expectedContentHash` on `ImportXmlBlock` and `ImportFromDocuments` (0.2.3.0).
 - `Program.cs`: the `WriteAudit` call-tool filter and the tracking of the audited tools (0.2.3.0).
 - `TiaMcpServer.csproj`: `AssemblyVersion` 0.2.6.0, so `--doctor` tells the fork from the original.
+- `Siemens/Software/Portal.Software.Core.cs`, `ModelContextProtocol/Software/McpServer.Software.Core.cs`, `Responses.cs`:
+  `CompileSoftware` throws with the cause instead of returning null, reports the safety program and the blocks still
+  inconsistent afterwards; Openness V21 has no "rebuild all" (round 7).
+- `Siemens/Portal.cs`: `InTransactionNow`, so a batch can stop at the first TIA Portal error inside a transaction (round 7).
+- `Siemens/Portal.Documents.cs`, `Siemens/Portal.Sources.cs`, `ModelContextProtocol/McpServer.Documents.cs`:
+  `ExportBlocksAsDocuments` hands back the blocks it did not export; nothing exported is an error (round 7).

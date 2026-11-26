@@ -358,12 +358,14 @@ namespace TiaMcpServer.ModelContextProtocol
                     
                     return new ResponseExportBlocksAsDocuments
                     {
-                        Message = $"No blocks found with regex '{regexName}' in '{softwarePath}'",
+                        Message = $"WARNING: no block matches regexName '{regexName}' in '{softwarePath}' - nothing was exported. " +
+                                  "Check the name or pattern ('GetBlocks' lists the blocks).",
                         Items = new List<ResponseBlockInfo>(),
                         Meta = new JsonObject
                         {
                             ["timestamp"] = DateTime.Now,
                             ["success"] = true,
+                            ["warning"] = "filter matched nothing",
                             ["totalBlocks"] = 0,
                             ["exportedBlocks"] = 0,
                             ["duration"] = (DateTime.Now - startTime).TotalSeconds
@@ -375,7 +377,14 @@ namespace TiaMcpServer.ModelContextProtocol
                 progress.Report(new ProgressNotificationValue { Progress = 0, Total = totalBlocks, Message = $"Starting export of {totalBlocks} blocks as documents..." });
 
                 // Export blocks as documents asynchronously
-                var exportedBlocks = await Task.Run(() => Portal.ExportBlocksAsDocuments(softwarePath, exportPath, regexName, preservePath));
+                var failures = new List<string>();
+                var exportedBlocks = await Task.Run(() => Portal.ExportBlocksAsDocuments(softwarePath, exportPath, regexName, preservePath, failures));
+                var (exportError, exportWarning) = BlockExportOutcome(totalBlocks, exportedBlocks?.Count() ?? 0, failures);
+
+                if (exportError != null)
+                {
+                    throw new McpException(exportError);
+                }
                 
                 // Send progress update after export completion
                 if (exportedBlocks != null)
@@ -423,7 +432,8 @@ namespace TiaMcpServer.ModelContextProtocol
 
                     return new ResponseExportBlocksAsDocuments
                     {
-                        Message = $"Document export completed: {processedCount} blocks with regex '{regexName}' exported from '{softwarePath}' to '{exportPath}'",
+                        Message = $"Document export completed: {processedCount} blocks with regex '{regexName}' exported from '{softwarePath}' to '{exportPath}'" +
+                                  (exportWarning == null ? string.Empty : $". {exportWarning}"),
                         Items = responseList,
                         Meta = new JsonObject
                         {
@@ -431,6 +441,7 @@ namespace TiaMcpServer.ModelContextProtocol
                             ["success"] = true,
                             ["totalBlocks"] = totalBlocks,
                             ["exportedBlocks"] = processedCount,
+                            ["notExported"] = failures.Count,
                             ["duration"] = duration
                         }
                     };
@@ -448,6 +459,28 @@ namespace TiaMcpServer.ModelContextProtocol
                 Logger?.LogError(ex, $"Failed exporting documents to '{exportPath}'");
                 throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append($"Unexpected error exporting documents to '{exportPath}': {ex.Message}", ex), ex);
             }
+        }
+
+        /// <summary>
+        /// Turns the per-block failures of a document export into an error when nothing was
+        /// exported although blocks matched and TIA Portal refused at least one - in online mode it
+        /// refuses every block, which used to look like a successful export of nothing - or into a
+        /// warning when some were not exported. Blocks skipped as inconsistent alone stay a warning:
+        /// the Editor compiles such a block and exports again.
+        /// </summary>
+        public static (string? Error, string? Warning) BlockExportOutcome(int matched, int exported, IList<string> failures)
+        {
+            var causes = string.Join(" | ", failures.Take(5)) + (failures.Count > 5 ? $" | ... ({failures.Count - 5} more)" : string.Empty);
+            var online = failures.Any(f => f.IndexOf("online", StringComparison.OrdinalIgnoreCase) >= 0)
+                ? " TIA Portal exports no block while the PLC is online: go offline and export again."
+                : string.Empty;
+
+            if (matched > 0 && exported == 0 && failures.Any(f => !f.EndsWith(TiaMcpServer.Siemens.Portal.InconsistentNotExported, StringComparison.Ordinal)))
+            {
+                return ($"None of the {matched} matching block(s) was exported: {causes}.{online}", null);
+            }
+
+            return (null, failures.Count == 0 ? null : $"WARNING: {failures.Count} block(s) not exported: {causes}.{online}");
         }
 
         [McpServerTool(Name = "ImportFromDocuments", Title = "Import from documents", Destructive = true, Idempotent = true, OpenWorld = false), Description("Import from documents (.s7dcl/.s7res)")]

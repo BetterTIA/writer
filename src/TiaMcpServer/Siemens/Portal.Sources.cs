@@ -291,9 +291,11 @@ namespace TiaMcpServer.Siemens
                     // snapshot missing every block would be worse than a less readable one.
                     if (Engineering.TiaMajorVersion >= 20)
                     {
-                        var blocks = ExportBlocksAsDocuments(softwarePath, exportPath, string.Empty, preservePath: true);
+                        var failures = new List<string>();
+                        var blocks = ExportBlocksAsDocuments(softwarePath, exportPath, string.Empty, preservePath: true, failures);
 
                         Record(result, "blocks", "document", blocks?.Count() ?? 0);
+                        result.Skipped.AddRange(failures.Select(f => $"block {f}"));
                     }
                     else
                     {

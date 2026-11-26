@@ -324,6 +324,15 @@ namespace TiaMcpServer.ModelContextProtocol
         /// whole PLC.
         /// </summary>
         public IEnumerable<CompileMessage>? Messages { get; set; }
+
+        /// <summary>Only from CompileSoftware: the PLC has a safety program.</summary>
+        public bool? SafetyProgram { get; set; }
+
+        /// <summary>Only from CompileSoftware: fail-safe blocks inconsistent before the compile - what it compiled of the safety program.</summary>
+        public IEnumerable<string>? FailsafeInconsistent { get; set; }
+
+        /// <summary>Only from CompileSoftware: blocks inconsistent after the compile; they need Software (rebuild all) in TIA Portal.</summary>
+        public IEnumerable<string>? StillInconsistent { get; set; }
     }
 
     public class CompileMessage

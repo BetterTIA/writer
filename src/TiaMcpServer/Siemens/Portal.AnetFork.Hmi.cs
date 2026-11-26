@@ -680,11 +680,19 @@ namespace TiaMcpServer.Siemens
                                 $"'{attribute}' exists in {text.Items.Count} language(s) ({string.Join(", ", text.Items.Select(i => i.Language.Culture.Name))}); pass one of them as 'culture'.");
                         }
 
-                        result.Changes.Add(new XmlChange { Object = screenName, Where = $"{where} [{texts[0].Language.Culture.Name}]", Old = texts[0].Text ?? string.Empty, New = value });
+                        // Unified refuses plain text and a second <p>: convert plain text, refuse bad markup already in the dry run.
+                        var markup = HmiSpecs.TextMarkup(value);
+
+                        if (HmiSpecs.TextMarkupProblem(markup) is string problem)
+                        {
+                            throw new PortalException(PortalErrorCode.InvalidParams, $"'{where}': {problem}.");
+                        }
+
+                        result.Changes.Add(new XmlChange { Object = screenName, Where = $"{where} [{texts[0].Language.Culture.Name}]", Old = texts[0].Text ?? string.Empty, New = markup });
 
                         if (!dryRun)
                         {
-                            texts[0].Text = value;
+                            texts[0].Text = markup;
                         }
                     }
                     else

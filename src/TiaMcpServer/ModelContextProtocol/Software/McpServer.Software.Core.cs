@@ -52,34 +52,36 @@ namespace TiaMcpServer.ModelContextProtocol
         }
 
         [McpServerTool(Name = "CompileSoftware", Title = "Compile software", Destructive = false, Idempotent = true, OpenWorld = false, UseStructuredContent = true),
-         Description("Compile the PLC software and report every compiler message with the object it belongs to, so errors can be fixed without re-reading the whole PLC. Warnings are reported as a successful compile with detail; only errors fail the call")]
+         Description("Compile the PLC software and report every compiler message with the object it belongs to, so errors can be fixed without re-reading the whole PLC. Warnings are reported as a successful compile with detail; only errors fail the call. " +
+                     "This is the recovery when CompileBlock leaves blocks inconsistent. Openness offers no 'rebuild all': blocks still inconsistent afterwards are listed (StillInconsistent) and then need Compile > Software (rebuild all) in TIA Portal by hand. " +
+                     "The safety program is compiled with it when fail-safe blocks need it, which needs the safety password: the fail-safe blocks inconsistent before the compile are reported (FailsafeInconsistent)")]
         public static ResponseCompileSoftware CompileSoftware(
             [Description("softwarePath: defines the path in the project structure to the PLC software")] string softwarePath,
-            [Description("password: the password to access adminsitration, default: no password")] string password = "")
+            [Description("password: the password of the safety program, needed only when the compile covers it; default: no password")] string password = "")
         {
             try
             {
-                var result = Portal.CompileSoftware(softwarePath, password);
-
-                if (result == null)
-                {
-                    throw new McpException(
-                        $"Failed compiling software '{softwarePath}'. Check that the path names a PLC software " +
-                        "('GetProjectTree' lists them) and, for a safety program, that 'password' is correct.");
-                }
+                var (safetyProgram, loggedOn, failsafeInconsistent) = Portal.SafetyBeforeCompile(softwarePath);
+                var result = Portal.CompileSoftware(softwarePath, password)
+                    ?? throw new McpException($"Failed compiling software '{softwarePath}': no project is open.");
+                var stillInconsistent = Portal.InconsistentBlocks(softwarePath);
 
                 var messages = FlattenCompilerMessages(result.Messages, 0).ToList();
                 var state = result.State.ToString();
                 var failed = result.State == CompilerResultState.Error;
+                var notes = CompileNotes(safetyProgram, loggedOn || !string.IsNullOrEmpty(password), failsafeInconsistent, stillInconsistent, failed);
 
                 var response = new ResponseCompileSoftware
                 {
                     Message = $"Compiling '{softwarePath}' finished with state '{state}': " +
-                              $"{result.ErrorCount} error(s), {result.WarningCount} warning(s)",
+                              $"{result.ErrorCount} error(s), {result.WarningCount} warning(s)" + notes,
                     State = state,
                     ErrorCount = result.ErrorCount,
                     WarningCount = result.WarningCount,
                     Messages = messages,
+                    SafetyProgram = safetyProgram,
+                    FailsafeInconsistent = failsafeInconsistent,
+                    StillInconsistent = stillInconsistent,
                     Meta = new JsonObject
                     {
                         ["timestamp"] = DateTime.Now,
@@ -87,7 +89,10 @@ namespace TiaMcpServer.ModelContextProtocol
                         ["state"] = state,
                         ["errorCount"] = result.ErrorCount,
                         ["warningCount"] = result.WarningCount,
-                        ["messageCount"] = messages.Count
+                        ["messageCount"] = messages.Count,
+                        ["safetyProgram"] = safetyProgram,
+                        ["failsafeInconsistent"] = failsafeInconsistent.Count,
+                        ["stillInconsistent"] = stillInconsistent.Count
                     }
                 };
 
@@ -102,15 +107,56 @@ namespace TiaMcpServer.ModelContextProtocol
 
                     throw new McpException(
                         $"Compiling '{softwarePath}' failed with {result.ErrorCount} error(s). " +
-                        string.Join(" | ", offenders));
+                        string.Join(" | ", offenders) + notes);
                 }
 
                 return response;
+            }
+            catch (PortalException pex)
+            {
+                throw new McpException(TiaMcpServer.Siemens.ErrorDetail.Append(pex.Message, pex), pex);
             }
             catch (Exception ex) when (ex is not McpException)
             {
                 throw new McpException($"Unexpected error compiling software '{softwarePath}': {ex.Message}", ex);
             }
+        }
+
+        /// <summary>
+        /// The safety and rebuild part of the CompileSoftware message: what the compile covered of
+        /// the safety program, and what stays inconsistent - which only a manual
+        /// 'Software (rebuild all)' in TIA Portal can still fix, since Openness has none.
+        /// </summary>
+        /// <param name="canCompileSafety">Logged on to the safety program before, or a password was given.</param>
+        public static string CompileNotes(bool safetyProgram, bool canCompileSafety, IList<string> failsafeInconsistent, IList<string> stillInconsistent, bool failed)
+        {
+            var notes = string.Empty;
+
+            if (failsafeInconsistent.Count > 0)
+            {
+                notes += $". SAFETY: {failsafeInconsistent.Count} fail-safe block(s) were inconsistent before the compile " +
+                         $"({List(failsafeInconsistent)}): the compile covers the safety program and changes its signature" +
+                         (canCompileSafety ? string.Empty : "; TIA Portal compiles it only with the safety password ('password') or after a login in TIA Portal");
+            }
+            else if (safetyProgram)
+            {
+                notes += ". The PLC has a safety program; no fail-safe block was inconsistent before the compile";
+            }
+
+            if (stillInconsistent.Count > 0)
+            {
+                notes += $". WARNING: still inconsistent after the compile ({stillInconsistent.Count}): {List(stillInconsistent)} - " +
+                         "Openness offers no 'rebuild all'; run Compile > Software (rebuild all) in TIA Portal";
+            }
+
+            if (failed && safetyProgram && !canCompileSafety)
+            {
+                notes += ". If the errors concern the safety program, pass 'password' or log on in TIA Portal";
+            }
+
+            return notes.Length == 0 ? notes : notes + ".";
+
+            static string List(IList<string> paths) => string.Join(", ", paths.Take(15)) + (paths.Count > 15 ? ", ..." : string.Empty);
         }
 
         /// <summary>
